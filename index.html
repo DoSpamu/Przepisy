@@ -39,103 +39,69 @@
 </head>
 <body><div id="root"></div>
 <script type="text/babel">
-const {useState,useEffect} = React;
+const {useState, useEffect} = React;
 
-/* ─── storage ─────────────────────────── */
-const KR="przepisy_v8", KI="img_chosen_v5", KK="api_keys_v2";
-const gs = k=>{try{return JSON.parse(localStorage.getItem(k))}catch{return null}};
-const ss = (k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}};
+/* ─── Storage keys ───────────────────── */
+const KR  = "przepisy_v8";
+const KI  = "img_chosen_v5";
+const KK  = "api_keys_v2";
+const KYT = "yt_api_key_v1";
+const KCH = "yt_channel_ids_v1";
 
-/* ─── YouTube ID extractor ────────────── */
+const gs = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
+const ss = (k,v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+/* ─── YouTube ID extractor ───────────── */
 function getYTId(url) {
-  if (!url) return null;
-  // shorts: youtube.com/shorts/ID
-  let m = url.match(/shorts\/([a-zA-Z0-9_-]{11})/);
-  if (m) return m[1];
-  // youtu.be/ID
-  m = url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
-  if (m) return m[1];
-  // watch?v=ID
-  m = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
-  if (m) return m[1];
+  if(!url) return null;
+  let m = url.match(/shorts\/([a-zA-Z0-9_-]{11})/); if(m) return m[1];
+  m = url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);  if(m) return m[1];
+  m = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);       if(m) return m[1];
   return null;
 }
 
 function getYTThumbs(url) {
-  const id = getYTId(url);
-  if (!id) return [];
+  const id = getYTId(url); if(!id) return [];
   return [
-    { thumb: `https://img.youtube.com/vi/${id}/maxresdefault.jpg`, full: `https://img.youtube.com/vi/${id}/maxresdefault.jpg`, label: "Max (1280px)" },
-    { thumb: `https://img.youtube.com/vi/${id}/sddefault.jpg`,     full: `https://img.youtube.com/vi/${id}/sddefault.jpg`,     label: "SD (640px)" },
-    { thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,     full: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,     label: "HQ (480px)" },
-    { thumb: `https://img.youtube.com/vi/${id}/mqdefault.jpg`,     full: `https://img.youtube.com/vi/${id}/mqdefault.jpg`,     label: "MQ (320px)" },
+    {thumb:`https://img.youtube.com/vi/${id}/maxresdefault.jpg`,full:`https://img.youtube.com/vi/${id}/maxresdefault.jpg`,label:"Max"},
+    {thumb:`https://img.youtube.com/vi/${id}/sddefault.jpg`,    full:`https://img.youtube.com/vi/${id}/sddefault.jpg`,    label:"SD"},
+    {thumb:`https://img.youtube.com/vi/${id}/hqdefault.jpg`,    full:`https://img.youtube.com/vi/${id}/hqdefault.jpg`,    label:"HQ"},
+    {thumb:`https://img.youtube.com/vi/${id}/mqdefault.jpg`,    full:`https://img.youtube.com/vi/${id}/mqdefault.jpg`,    label:"MQ"},
   ];
 }
 
-// HQ frame variants: try hq1/hq2/hq3 first (undocumented, 480px), fallback to 1/2/3 (120px)
 function getYTFrames(id) {
   return [
-    // frame 0: main thumbnail — try maxres → hq
-    { hq: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
-      fb: `https://img.youtube.com/vi/${id}/mqdefault.jpg`,
-      label: "okładka" },
-    // frame 1: ~25%
-    { hq: `https://img.youtube.com/vi/${id}/hq1.jpg`,
-      fb: `https://img.youtube.com/vi/${id}/1.jpg`,
-      label: "~25% 🎬" },
-    // frame 2: ~50%
-    { hq: `https://img.youtube.com/vi/${id}/hq2.jpg`,
-      fb: `https://img.youtube.com/vi/${id}/2.jpg`,
-      label: "~50% 🎬" },
-    // frame 3: ~75%
-    { hq: `https://img.youtube.com/vi/${id}/hq3.jpg`,
-      fb: `https://img.youtube.com/vi/${id}/3.jpg`,
-      label: "~75% 🎬" },
+    {hq:`https://img.youtube.com/vi/${id}/hqdefault.jpg`, fb:`https://img.youtube.com/vi/${id}/mqdefault.jpg`, label:"okładka"},
+    {hq:`https://img.youtube.com/vi/${id}/hq1.jpg`,       fb:`https://img.youtube.com/vi/${id}/1.jpg`,         label:"~25% 🎬"},
+    {hq:`https://img.youtube.com/vi/${id}/hq2.jpg`,       fb:`https://img.youtube.com/vi/${id}/2.jpg`,         label:"~50% 🎬"},
+    {hq:`https://img.youtube.com/vi/${id}/hq3.jpg`,       fb:`https://img.youtube.com/vi/${id}/3.jpg`,         label:"~75% 🎬"},
   ];
 }
 
-// Smart image with HQ → fallback chain
 function YTFrame({src, fallback, style, onError}) {
   const [cur, setCur] = useState(src);
   useEffect(()=>setCur(src),[src]);
-  return <img src={cur} style={style}
-    onError={()=>{ if(cur===src && fallback) setCur(fallback); else onError&&onError(); }}
-    alt=""/>;
+  return <img src={cur} style={style} alt=""
+    onError={()=>{ if(cur===src && fallback) setCur(fallback); else onError&&onError(); }}/>;
 }
 
-// Auto-pick best available YT thumb (maxres → hq fallback)
-function BestYTImg({ytId, style, onLoad, onError}) {
-  const [src, setSrc] = useState(`https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`);
-  const [tried, setTried] = useState(0);
-  const fallbacks = ["sddefault","hqdefault","mqdefault"];
-
-  const handleErr = () => {
-    if (tried < fallbacks.length) {
-      setSrc(`https://img.youtube.com/vi/${ytId}/${fallbacks[tried]}.jpg`);
-      setTried(t=>t+1);
-    } else {
-      onError && onError();
-    }
-  };
-  return <img src={src} style={style} onLoad={onLoad} onError={handleErr} alt="miniatura"/>;
-}
-
-/* ─── Wikimedia ───────────────────────── */
+/* ─── Image search APIs ──────────────── */
 async function fetchWikimedia(query, wikiTitle) {
   const results = [];
-  if (wikiTitle) {
+  if(wikiTitle) {
     try {
       const r = await fetch(`https://pl.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(wikiTitle)}&prop=pageimages&format=json&pithumbsize=600&pilimit=1&origin=*`);
       const d = await r.json();
       const pg = Object.values(d?.query?.pages||{})[0];
-      if (pg?.thumbnail?.source) results.push({thumb:pg.thumbnail.source,full:pg.thumbnail.source,title:"Wikipedia: "+wikiTitle});
+      if(pg?.thumbnail?.source) results.push({thumb:pg.thumbnail.source,full:pg.thumbnail.source,title:"Wikipedia: "+wikiTitle});
     } catch{}
   }
   try {
     const r = await fetch(`https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&srnamespace=6&srlimit=15&format=json&origin=*`);
     const d = await r.json();
     const titles = (d?.query?.search||[]).map(s=>s.title);
-    if (titles.length) {
+    if(titles.length) {
       const r2 = await fetch(`https://commons.wikimedia.org/w/api.php?action=query&titles=${encodeURIComponent(titles.join("|"))}&prop=imageinfo&iiprop=url|thumburl|mime&iiurlwidth=400&format=json&origin=*`);
       const d2 = await r2.json();
       Object.values(d2?.query?.pages||{}).forEach(p=>{
@@ -152,63 +118,90 @@ async function fetchWikimedia(query, wikiTitle) {
 }
 
 async function fetchUnsplash(query, key) {
-  if (!key) throw new Error("Brak klucza Unsplash API");
+  if(!key) throw new Error("Brak klucza Unsplash");
   const r = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=12&orientation=landscape&client_id=${key}`);
-  if (!r.ok) throw new Error("Błąd Unsplash ("+r.status+")");
+  if(!r.ok) throw new Error("Błąd Unsplash ("+r.status+")");
   const d = await r.json();
   return (d.results||[]).map(p=>({thumb:p.urls.small,full:p.urls.regular,title:p.alt_description||""}));
 }
 
 async function fetchPexels(query, key) {
-  if (!key) throw new Error("Brak klucza Pexels API");
+  if(!key) throw new Error("Brak klucza Pexels");
   const r = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=12&orientation=landscape`,{headers:{Authorization:key}});
-  if (!r.ok) throw new Error("Błąd Pexels ("+r.status+")");
+  if(!r.ok) throw new Error("Błąd Pexels ("+r.status+")");
   const d = await r.json();
   return (d.photos||[]).map(p=>({thumb:p.src.medium,full:p.src.large,title:p.alt||""}));
 }
 
-/* ─── Recipes data ────────────────────── */
+/* ─── YouTube Similar Search ─────────── */
+const YT_CHANNELS = [
+  {handle:"thefoodini",     label:"thefoodini"},
+  {handle:"KochamGotowac",  label:"Kocham Gotować"},
+  {handle:"Mrgiboneg",      label:"Mrgiboneg"},
+  {handle:"OddaszFartucha", label:"Strzelczyk"},
+];
+
+async function resolveHandle(handle, key) {
+  const r = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${handle}&key=${key}`);
+  if(!r.ok) return null;
+  const d = await r.json();
+  return d.items?.[0]?.id || null;
+}
+
+async function ytSearch(query, channelId, key) {
+  const r = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&channelId=${channelId}&type=video&maxResults=3&key=${key}`);
+  if(!r.ok) return [];
+  const d = await r.json();
+  return (d.items||[]).map(v=>({
+    id:      v.id.videoId,
+    title:   v.snippet.title,
+    thumb:   v.snippet.thumbnails?.medium?.url||v.snippet.thumbnails?.default?.url,
+    url:     `https://www.youtube.com/watch?v=${v.id.videoId}`,
+  }));
+}
+
+/* ─── Default recipes ────────────────── */
 const DR = [
-  {id:1,  cat:"🐔 Kurczak",  name:"Kurczak w sosie cebulowym",                      link:"https://youtube.com/shorts/NjPCl4zwbUk",      note:"Listopad",                 wiki:"",               q:"kurczak sos cebulowy obiad",             skladniki:["filet z kurczaka","3 cebule","masło","śmietanka lub mascarpone","bulion drobiowy","mąka","sół, pieprz","słodka papryka","curry"]},
-  {id:2,  cat:"🐔 Kurczak",  name:"Kurczak z kopytkami",                             link:"https://youtube.com/shorts/tpBLJRa8OyY",     note:"Czerwiec",                 wiki:"Kopytka",        q:"kopytka ziemniaczane polskie obiad",     skladniki:["filet z kurczaka","ziemniaki","mąka pszenna","jajko","cebula","masło","śmietana","sół, pieprz"]},
-  {id:3,  cat:"🐔 Kurczak",  name:"Kurczak teriyaki",                                link:"https://youtube.com/shorts/nt3_kaQjTL8",     note:"Marzec 2025",              wiki:"Teriyaki",       q:"chicken teriyaki rice sesame bowl",      skladniki:["filet z kurczaka","sos sojowy","miód","czosnek","imbir","olej sezamowy","skrobia","ryż","sezam"]},
-  {id:4,  cat:"🐔 Kurczak",  name:"Kurczak z sosem serowym",                        link:"https://youtube.com/shorts/YBdjb_MKjl8",     note:"Marzec 2025",              wiki:"",               q:"chicken cheese cream sauce dinner",      skladniki:["filet z kurczaka","ser żółty","śmietanka kremówka","masło","czosnek","sół, pieprz"]},
-  {id:5,  cat:"🐔 Kurczak",  name:"Dragon Chicken (głęboki olej)",                  link:"https://www.facebook.com/share/v/1A6qMtKk8D/",note:"Marzec 2025",             wiki:"",               q:"crispy fried chicken chili asian",       skladniki:["filet z kurczaka","olej (dużo)","sos sojowy","chili","czosnek","imbir","mąka/skrobia","cebula dymka","sezam"]},
-  {id:6,  cat:"🐔 Kurczak",  name:"Kurczak śmietanowo-maślany z parmezanem",       link:"https://www.facebook.com/share/r/1Gw1JVygMr/",note:"Facebook",                wiki:"",               q:"chicken cream butter parmesan sauce",    skladniki:["filet z kurczaka","masło","śmietanka kremówka","parmezan","czosnek","sół, pieprz","natka pietruszki"]},
-  {id:7,  cat:"🐔 Kurczak",  name:"Kurczak po chińsku z air fryer",                link:"https://youtube.com/shorts/eUwQQF-jIUE",     note:"Air fryer",                wiki:"",               q:"chinese glazed crispy chicken asian",    skladniki:["filet z kurczaka","sos sojowy","czosnek","imbir","miód","olej sezamowy","chili","skrobia"]},
-  {id:8,  cat:"🐔 Kurczak",  name:"Kurczak z ziemniakami i papryką w papilotach",  link:"https://youtube.com/shorts/9iXCtnFyHHI",     note:"Styczeń 2026",             wiki:"",               q:"baked chicken potato bell pepper foil",  skladniki:["udka kurczaka","ziemniaki","papryka czerwona","oliwa","czosnek","sół, pieprz","zioła prowansalskie"]},
-  {id:9,  cat:"🥩 Schab",    name:"Schab w sosie pomidorowym z warzywami",         link:"https://youtube.com/shorts/-hKy3oENQSA",     note:"Zasmażka z masła",         wiki:"Schab wieprzowy",q:"schab wieprzowy sos pomidorowy warzywa", skladniki:["schab wieprzowy","papryka czerwona","pieczarki","cebula","czosnek","koncentrat pomidorowy","masło","mąka","bulion","śmietanka","oregano"]},
-  {id:10, cat:"🥩 Schab",    name:"Schab w miodowo-czosnkowym sosie",              link:"https://youtube.com/shorts/MjrAx1UqFE8",    note:"",                         wiki:"Schab wieprzowy",q:"pork chop honey garlic glaze sauce",     skladniki:["schab wieprzowy","miód","czosnek","sos sojowy","masło","bulion","mąka","ryż"]},
-  {id:11, cat:"🥩 Schab",    name:"Schab w cebulowym sosie",                       link:"https://youtu.be/uHYBPO_OpGE",              note:"Już robiony ✅",            wiki:"Schab wieprzowy",q:"schab duszony cebula polska kuchnia",    skladniki:["schab wieprzowy","cebula (dużo)","masło","bulion","śmietanka","mąka","tymianek","sół, pieprz"]},
-  {id:12, cat:"🥩 Schab",    name:"Rolada schabowa z pietruszką",                  link:"https://youtube.com/shorts/PrNv097lPds",    note:"",                         wiki:"",               q:"stuffed pork loin roll roasted sliced",  skladniki:["schab (plastry)","natka pietruszki","czosnek","sół, pieprz","sznurek","olej"]},
-  {id:13, cat:"🥩 Schab",    name:"Roladki ze schabu w białym sosie",              link:"https://youtube.com/shorts/_tuUDqUwkwM",    note:"",                         wiki:"",               q:"pork rolls white cream sauce braised",   skladniki:["schab wieprzowy","śmietanka","masło","mąka","bulion","czosnek","sół, pieprz"]},
-  {id:14, cat:"🥩 Karkówka", name:"Karkówka w sosie cebulowym",                    link:"https://youtube.com/shorts/HzillIoCblM",    note:"",                         wiki:"Karkówka",       q:"karkówka duszona cebula sos polska",     skladniki:["karkówka wieprzowa","cebula","masło","bulion","śmietanka","mąka","sół, pieprz"]},
-  {id:15, cat:"🥩 Karkówka", name:"Karkówka z ziemniakami i kapustą kiszoną",      link:"https://youtube.com/shorts/KyWnBaHG-Zw",   note:"",                         wiki:"Kapusta kiszona",q:"pork sauerkraut potato stew one pot",    skladniki:["karkówka wieprzowa","ziemniaki","kapusta kiszona","cebula","czosnek","liść laurowy","ziele angielskie","bulion"]},
-  {id:16, cat:"🥩 Karkówka", name:"Karkówka po wieśniacku",                        link:"https://youtube.com/shorts/RlOWE-L1RIo",   note:"Styczeń 2026",             wiki:"Karkówka",       q:"roasted pork neck potatoes rustic oven", skladniki:["karkówka wieprzowa","ziemniaki","cebula","czosnek","papryka","oliwa","sół, pieprz"]},
-  {id:17, cat:"🥩 Karkówka", name:"Karkówka w sosie pomidorowym z pieczarkami",    link:"https://youtube.com/shorts/daGscHd9Hcg",   note:"Piekarnik",                wiki:"",               q:"pork neck tomato mushroom sauce baked",  skladniki:["karkówka wieprzowa","passata","pieczarki","papryka","cebula","czosnek","oregano","bazylia"]},
-  {id:18, cat:"🐄 Wołowina", name:"Wołowina mielona z kluseczkami po azjatycku",   link:"https://youtube.com/shorts/SjWEO6g-kb4",   note:"Marzec 2025",              wiki:"",               q:"ground beef asian noodles soy wok bowl", skladniki:["wołowina mielona","sos sojowy","czosnek","imbir","cebula dymka","olej sezamowy","chili","kluseczki"]},
-  {id:19, cat:"🐄 Wołowina", name:"Zrazy wołowe",                                  link:"https://youtu.be/dHFqHP_1zz8",             note:"",                         wiki:"Zrazy",          q:"zrazy wołowe polska kuchnia ogórek",     skladniki:["udziec wołowy","ogórek kiszony","boczek wędzony","cebula","musztarda","liść laurowy","mąka","bulion"]},
-  {id:20, cat:"🐄 Wołowina", name:"Forszmak polski / stroganow",                   link:"https://youtube.com/shorts/5ry4j7KQwJI",   note:"",                         wiki:"Boeuf Stroganow",q:"beef stroganoff mushroom sour cream",    skladniki:["wołowina","pieczarki","cebula","ogórki kiszone","śmietana","mąka","masło","bulion"]},
-  {id:21, cat:"🐄 Wołowina", name:"Żeberka w sosie teriyaki",                      link:"https://youtube.com/shorts/08EBGmUXf6s",   note:"",                         wiki:"",               q:"beef ribs teriyaki glaze sticky bbq",    skladniki:["żeberka wołowe","sos sojowy","miód","czosnek","imbir","olej sezamowy","skrobia","sezam"]},
-  {id:22, cat:"🌭 Kiełbasa",  name:"Kiełbasa chorizo z makaronem",                 link:"https://youtube.com/shorts/ZZ6TUWmKQRk",   note:"Git! ✅",                  wiki:"Chorizo",        q:"chorizo pasta tomato sauce pan food",    skladniki:["kiełbasa chorizo","makaron","passata","czosnek","cebula","papryka wędzona","parmezan","bazylia"]},
-  {id:23, cat:"🌭 Kiełbasa",  name:"Kiełbasa z sosem paprykowym i ziemniaki",      link:"https://youtube.com/shorts/bBoX74VH87c",   note:"",                         wiki:"Kiełbasa",       q:"polish sausage pepper sauce potato",     skladniki:["kiełbasa","papryka czerwona i żółta","ziemniaki","cebula","śmietana","czosnek","papryka słodka"]},
-  {id:24, cat:"🐟 Ryba",      name:"Fish and Chips",                               link:"https://youtube.com/shorts/-xovB3qzMos",   note:"",                         wiki:"Fish and chips", q:"fish and chips battered cod fries",      skladniki:["filet rybny (dorsz)","mąka pszenna","piwo jasne","proszek do pieczenia","sół, pieprz","ziemniaki (frytki)","olej"]},
-  {id:25, cat:"🥘 Wariacje",  name:"Ryż z wczoraj z sosem sojowym",                link:"https://youtube.com/shorts/eTgI_MDPyYs",  note:"Resztki 😄",               wiki:"Smażony ryż",    q:"fried rice egg wok soy sauce asian",     skladniki:["ryż (z poprzedniego dnia)","sos sojowy","jajko","cebula dymka","olej","czosnek"]},
-  {id:26, cat:"🥘 Wariacje",  name:"Makaron z zupki chińskiej z warzywami",        link:"https://youtube.com/shorts/DIWgWDzek8A",  note:"Cokolwiek z lodówki 😅",   wiki:"Zupka chińska",  q:"instant ramen noodles bowl vegetables",  skladniki:["zupka chińska","warzywa (cokolwiek masz)","jajko","sos sojowy","czosnek","olej"]},
-  {id:27, cat:"🥘 Wariacje",  name:"Kapusta z mielonym ala gołąbek",               link:"https://youtube.com/shorts/A6K3e3lsFA0",  note:"",                         wiki:"Gołąbki",        q:"gołąbki polska kuchnia kapusta mielone", skladniki:["kapusta biała","mięso mielone","ryż","cebula","koncentrat pomidorowy","czosnek","majeranek"]},
-  {id:28, cat:"🥘 Wariacje",  name:"Kartoflanka",                                  link:"https://www.facebook.com/share/p/1CPSVSZaJS/",note:"Facebook",             wiki:"Kartoflanka",    q:"kartoflanka zupa polska ziemniaki",      skladniki:["ziemniaki","boczek wędzony","cebula","marchew","pietruszka","liść laurowy","majeranek","bulion"]},
-  {id:29, cat:"🥘 Wariacje",  name:"Wieprzowina w pięciu smakach",                 link:"https://youtu.be/QEaXO7heFHc",             note:"",                         wiki:"Pięć smaków",    q:"pork five spice chinese braised noodles",skladniki:["wieprzowina","makaron ryżowy","5-spice","sos sojowy","sos ostrygowy","czosnek","imbir","pak choi"]},
-  {id:30, cat:"🥘 Wariacje",  name:"Makaron domowy z sosem z papryki",             link:"https://youtube.com/shorts/vzeLT2VzrKQ",  note:"",                         wiki:"Makaron",        q:"homemade pasta red pepper cream sauce",  skladniki:["mąka pszenna","jajka","woda","papryka czerwona","śmietanka","cebula","czosnek","masło"]},
-  {id:31, cat:"🥘 Wariacje",  name:"Szparagi",                                     link:"https://youtube.com/shorts/zGmqTDT184U",  note:"",                         wiki:"Szparag",        q:"asparagus butter garlic parmesan pan",   skladniki:["szparagi zielone","masło","czosnek","parmezan","cytryna","sół, pieprz"]},
-  {id:32, cat:"🥘 Wariacje",  name:"Makaron + mielone z jednej patelni",           link:"https://youtube.com/shorts/TurjJtwl2es",  note:"Styczeń 2026",             wiki:"",               q:"one pan pasta ground beef tomato cheese",skladniki:["mięso mielone","makaron","passata","cebula","czosnek","papryka","bulion","ser żółty"]},
-  {id:33, cat:"🥘 Wariacje",  name:"Rolada gołąbkowa",                             link:"https://youtube.com/shorts/J1gRJ3ZP-_Y",  note:"",                         wiki:"Gołąbki",        q:"stuffed cabbage rolls polish tomato",    skladniki:["kapusta (liście)","mięso mielone","ryż","cebula","jajko","koncentrat pomidorowy","śmietana","majeranek"]},
-  {id:34, cat:"🥘 Wariacje",  name:"Pieczarki do wódki 🍺",                        link:"https://youtube.com/shorts/a3ubNmoELV4",  note:"Impreza!",                 wiki:"Pieczarka",      q:"sauteed mushrooms butter garlic cream",  skladniki:["pieczarki","masło","czosnek","śmietana","natka pietruszki","sół, pieprz"]},
-  {id:35, cat:"🥗 Sałatki",   name:"Sałatka z kiszonej kapusty",                  link:"https://youtube.com/shorts/xNhMwoV3LWA",  note:"",                         wiki:"Kapusta kiszona",q:"sauerkraut salad carrot apple polish",   skladniki:["kapusta kiszona","jabłko","marchew","cebula","cukier","olej","sół"]},
-  {id:36, cat:"🥗 Sałatki",   name:"Sałatka z buraczków",                         link:"https://youtube.com/shorts/QFKgQBv9YPg",  note:"",                         wiki:"Burak ćwikłowy", q:"beetroot salad polish cwikla food",      skladniki:["buraki ugotowane","cebula","ocet","cukier","sół","olej"]},
-  {id:37, cat:"🥗 Sałatki",   name:"Zajebista sałatka (polecam!)",                link:"https://youtube.com/shorts/iyFpl2mmhm4",  note:"Styczeń 2026",             wiki:"Sałatka",        q:"fresh colorful salad bowl vegetables",   skladniki:["🎬 Sprawdź film po dokładne składniki!"]},
-  {id:38, cat:"🥖 Pieczywo",  name:"Chleb",                                       link:"https://youtube.com/shorts/Hassw-uaCRM",  note:"",                         wiki:"Chleb",           q:"homemade bread loaf rustic artisan",     skladniki:["mąka pszenna","drożdże","woda letnia","sół","olej"]},
-  {id:39, cat:"🥖 Pieczywo",  name:"Lawasze do kebaba",                           link:"https://youtube.com/shorts/CIjooqxnWi0",  note:"",                         wiki:"Lawasz",          q:"lavash flatbread soft thin homemade",    skladniki:["mąka pszenna","woda letnia","drożdże","sół","olej"]},
-  {id:40, cat:"🥖 Pieczywo",  name:"Bułka do burgerów",                           link:"https://youtube.com/shorts/IifL_NqJwx8",  note:"",                         wiki:"",               q:"burger bun sesame brioche homemade",     skladniki:["mąka pszenna","drożdże","mleko","masło","jajko","cukier","sół","sezam"]},
+  {id:1,  cat:"🐔 Kurczak",  name:"Kurczak w sosie cebulowym",                      link:"https://youtube.com/shorts/NjPCl4zwbUk",      note:"Listopad",                 wiki:"",               q:"kurczak sos cebulowy obiad",              skladniki:["filet z kurczaka","3 cebule","masło","śmietanka lub mascarpone","bulion drobiowy","mąka","sół, pieprz","słodka papryka","curry"]},
+  {id:2,  cat:"🐔 Kurczak",  name:"Kurczak z kopytkami",                             link:"https://youtube.com/shorts/tpBLJRa8OyY",     note:"Czerwiec",                 wiki:"Kopytka",        q:"kopytka ziemniaczane polskie obiad",      skladniki:["filet z kurczaka","ziemniaki","mąka pszenna","jajko","cebula","masło","śmietana","sół, pieprz"]},
+  {id:3,  cat:"🐔 Kurczak",  name:"Kurczak teriyaki",                                link:"https://youtube.com/shorts/nt3_kaQjTL8",     note:"Marzec 2025",              wiki:"Teriyaki",       q:"chicken teriyaki rice sesame bowl",       skladniki:["filet z kurczaka","sos sojowy","miód","czosnek","imbir","olej sezamowy","skrobia","ryż","sezam"]},
+  {id:4,  cat:"🐔 Kurczak",  name:"Kurczak z sosem serowym",                        link:"https://youtube.com/shorts/YBdjb_MKjl8",     note:"Marzec 2025",              wiki:"",               q:"chicken cheese cream sauce dinner",       skladniki:["filet z kurczaka","ser żółty","śmietanka kremówka","masło","czosnek","sół, pieprz"]},
+  {id:5,  cat:"🐔 Kurczak",  name:"Dragon Chicken (głęboki olej)",                  link:"https://www.facebook.com/share/v/1A6qMtKk8D/",note:"Marzec 2025",             wiki:"",               q:"crispy fried chicken chili asian",        skladniki:["filet z kurczaka","olej (dużo)","sos sojowy","chili","czosnek","imbir","mąka/skrobia","cebula dymka","sezam"]},
+  {id:6,  cat:"🐔 Kurczak",  name:"Kurczak śmietanowo-maślany z parmezanem",       link:"https://www.facebook.com/share/r/1Gw1JVygMr/",note:"Facebook",                wiki:"",               q:"chicken cream butter parmesan sauce",     skladniki:["filet z kurczaka","masło","śmietanka kremówka","parmezan","czosnek","sół, pieprz","natka pietruszki"]},
+  {id:7,  cat:"🐔 Kurczak",  name:"Kurczak po chińsku z air fryer",                link:"https://youtube.com/shorts/eUwQQF-jIUE",     note:"Air fryer",                wiki:"",               q:"chinese glazed crispy chicken asian",     skladniki:["filet z kurczaka","sos sojowy","czosnek","imbir","miód","olej sezamowy","chili","skrobia"]},
+  {id:8,  cat:"🐔 Kurczak",  name:"Kurczak z ziemniakami i papryką w papilotach",  link:"https://youtube.com/shorts/9iXCtnFyHHI",     note:"Styczeń 2026",             wiki:"",               q:"baked chicken potato bell pepper foil",   skladniki:["udka kurczaka","ziemniaki","papryka czerwona","oliwa","czosnek","sół, pieprz","zioła prowansalskie"]},
+  {id:9,  cat:"🥩 Schab",    name:"Schab w sosie pomidorowym z warzywami",         link:"https://youtube.com/shorts/-hKy3oENQSA",     note:"Zasmażka z masła",         wiki:"Schab wieprzowy",q:"schab wieprzowy sos pomidorowy warzywa",  skladniki:["schab wieprzowy","papryka czerwona","pieczarki","cebula","czosnek","koncentrat pomidorowy","masło","mąka","bulion","śmietanka","oregano"]},
+  {id:10, cat:"🥩 Schab",    name:"Schab w miodowo-czosnkowym sosie",              link:"https://youtube.com/shorts/MjrAx1UqFE8",    note:"",                         wiki:"Schab wieprzowy",q:"pork chop honey garlic glaze sauce",      skladniki:["schab wieprzowy","miód","czosnek","sos sojowy","masło","bulion","mąka","ryż"]},
+  {id:11, cat:"🥩 Schab",    name:"Schab w cebulowym sosie",                       link:"https://youtu.be/uHYBPO_OpGE",              note:"Już robiony ✅",            wiki:"Schab wieprzowy",q:"schab duszony cebula polska kuchnia",     skladniki:["schab wieprzowy","cebula (dużo)","masło","bulion","śmietanka","mąka","tymianek","sół, pieprz"]},
+  {id:12, cat:"🥩 Schab",    name:"Rolada schabowa z pietruszką",                  link:"https://youtube.com/shorts/PrNv097lPds",    note:"",                         wiki:"",               q:"stuffed pork loin roll roasted sliced",   skladniki:["schab (plastry)","natka pietruszki","czosnek","sół, pieprz","sznurek","olej"]},
+  {id:13, cat:"🥩 Schab",    name:"Roladki ze schabu w białym sosie",              link:"https://youtube.com/shorts/_tuUDqUwkwM",    note:"",                         wiki:"",               q:"pork rolls white cream sauce braised",    skladniki:["schab wieprzowy","śmietanka","masło","mąka","bulion","czosnek","sół, pieprz"]},
+  {id:14, cat:"🥩 Karkówka", name:"Karkówka w sosie cebulowym",                    link:"https://youtube.com/shorts/HzillIoCblM",    note:"",                         wiki:"Karkówka",       q:"karkówka duszona cebula sos polska",      skladniki:["karkówka wieprzowa","cebula","masło","bulion","śmietanka","mąka","sół, pieprz"]},
+  {id:15, cat:"🥩 Karkówka", name:"Karkówka z ziemniakami i kapustą kiszoną",      link:"https://youtube.com/shorts/KyWnBaHG-Zw",   note:"",                         wiki:"Kapusta kiszona",q:"pork sauerkraut potato stew one pot",     skladniki:["karkówka wieprzowa","ziemniaki","kapusta kiszona","cebula","czosnek","liść laurowy","ziele angielskie","bulion"]},
+  {id:16, cat:"🥩 Karkówka", name:"Karkówka po wieśniacku",                        link:"https://youtube.com/shorts/RlOWE-L1RIo",   note:"Styczeń 2026",             wiki:"Karkówka",       q:"roasted pork neck potatoes rustic oven",  skladniki:["karkówka wieprzowa","ziemniaki","cebula","czosnek","papryka","oliwa","sół, pieprz"]},
+  {id:17, cat:"🥩 Karkówka", name:"Karkówka w sosie pomidorowym z pieczarkami",    link:"https://youtube.com/shorts/daGscHd9Hcg",   note:"Piekarnik",                wiki:"",               q:"pork neck tomato mushroom sauce baked",   skladniki:["karkówka wieprzowa","passata","pieczarki","papryka","cebula","czosnek","oregano","bazylia"]},
+  {id:18, cat:"🐄 Wołowina", name:"Wołowina mielona z kluseczkami po azjatycku",   link:"https://youtube.com/shorts/SjWEO6g-kb4",   note:"Marzec 2025",              wiki:"",               q:"ground beef asian noodles soy wok bowl",  skladniki:["wołowina mielona","sos sojowy","czosnek","imbir","cebula dymka","olej sezamowy","chili","kluseczki"]},
+  {id:19, cat:"🐄 Wołowina", name:"Zrazy wołowe",                                  link:"https://youtu.be/dHFqHP_1zz8",             note:"",                         wiki:"Zrazy",          q:"zrazy wołowe polska kuchnia ogórek",      skladniki:["udziec wołowy","ogórek kiszony","boczek wędzony","cebula","musztarda","liść laurowy","mąka","bulion"]},
+  {id:20, cat:"🐄 Wołowina", name:"Forszmak polski / stroganow",                   link:"https://youtube.com/shorts/5ry4j7KQwJI",   note:"",                         wiki:"Boeuf Stroganow",q:"beef stroganoff mushroom sour cream",     skladniki:["wołowina","pieczarki","cebula","ogórki kiszone","śmietana","mąka","masło","bulion"]},
+  {id:21, cat:"🐄 Wołowina", name:"Żeberka w sosie teriyaki",                      link:"https://youtube.com/shorts/08EBGmUXf6s",   note:"",                         wiki:"",               q:"beef ribs teriyaki glaze sticky bbq",     skladniki:["żeberka wołowe","sos sojowy","miód","czosnek","imbir","olej sezamowy","skrobia","sezam"]},
+  {id:22, cat:"🌭 Kiełbasa",  name:"Kiełbasa chorizo z makaronem",                 link:"https://youtube.com/shorts/ZZ6TUWmKQRk",   note:"Git! ✅",                  wiki:"Chorizo",        q:"chorizo pasta tomato sauce pan food",     skladniki:["kiełbasa chorizo","makaron","passata","czosnek","cebula","papryka wędzona","parmezan","bazylia"]},
+  {id:23, cat:"🌭 Kiełbasa",  name:"Kiełbasa z sosem paprykowym i ziemniaki",      link:"https://youtube.com/shorts/bBoX74VH87c",   note:"",                         wiki:"Kiełbasa",       q:"polish sausage pepper sauce potato",      skladniki:["kiełbasa","papryka czerwona i żółta","ziemniaki","cebula","śmietana","czosnek","papryka słodka"]},
+  {id:24, cat:"🐟 Ryba",      name:"Fish and Chips",                               link:"https://youtube.com/shorts/-xovB3qzMos",   note:"",                         wiki:"Fish and chips", q:"fish and chips battered cod fries",       skladniki:["filet rybny (dorsz)","mąka pszenna","piwo jasne","proszek do pieczenia","sół, pieprz","ziemniaki (frytki)","olej"]},
+  {id:25, cat:"🥘 Wariacje",  name:"Ryż z wczoraj z sosem sojowym",                link:"https://youtube.com/shorts/eTgI_MDPyYs",  note:"Resztki 😄",               wiki:"Smażony ryż",    q:"fried rice egg wok soy sauce asian",      skladniki:["ryż (z poprzedniego dnia)","sos sojowy","jajko","cebula dymka","olej","czosnek"]},
+  {id:26, cat:"🥘 Wariacje",  name:"Makaron z zupki chińskiej z warzywami",        link:"https://youtube.com/shorts/DIWgWDzek8A",  note:"Cokolwiek z lodówki 😅",   wiki:"Zupka chińska",  q:"instant ramen noodles bowl vegetables",   skladniki:["zupka chińska","warzywa (cokolwiek masz)","jajko","sos sojowy","czosnek","olej"]},
+  {id:27, cat:"🥘 Wariacje",  name:"Kapusta z mielonym ala gołąbek",               link:"https://youtube.com/shorts/A6K3e3lsFA0",  note:"",                         wiki:"Gołąbki",        q:"gołąbki polska kuchnia kapusta mielone",  skladniki:["kapusta biała","mięso mielone","ryż","cebula","koncentrat pomidorowy","czosnek","majeranek"]},
+  {id:28, cat:"🥘 Wariacje",  name:"Kartoflanka",                                  link:"https://www.facebook.com/share/p/1CPSVSZaJS/",note:"Facebook",             wiki:"Kartoflanka",    q:"kartoflanka zupa polska ziemniaki",       skladniki:["ziemniaki","boczek wędzony","cebula","marchew","pietruszka","liść laurowy","majeranek","bulion"]},
+  {id:29, cat:"🥘 Wariacje",  name:"Wieprzowina w pięciu smakach",                 link:"https://youtu.be/QEaXO7heFHc",             note:"",                         wiki:"Pięć smaków",    q:"pork five spice chinese braised noodles", skladniki:["wieprzowina","makaron ryżowy","5-spice","sos sojowy","sos ostrygowy","czosnek","imbir","pak choi"]},
+  {id:30, cat:"🥘 Wariacje",  name:"Makaron domowy z sosem z papryki",             link:"https://youtube.com/shorts/vzeLT2VzrKQ",  note:"",                         wiki:"Makaron",        q:"homemade pasta red pepper cream sauce",   skladniki:["mąka pszenna","jajka","woda","papryka czerwona","śmietanka","cebula","czosnek","masło"]},
+  {id:31, cat:"🥘 Wariacje",  name:"Szparagi",                                     link:"https://youtube.com/shorts/zGmqTDT184U",  note:"",                         wiki:"Szparag",        q:"asparagus butter garlic parmesan pan",    skladniki:["szparagi zielone","masło","czosnek","parmezan","cytryna","sół, pieprz"]},
+  {id:32, cat:"🥘 Wariacje",  name:"Makaron + mielone z jednej patelni",           link:"https://youtube.com/shorts/TurjJtwl2es",  note:"Styczeń 2026",             wiki:"",               q:"one pan pasta ground beef tomato cheese", skladniki:["mięso mielone","makaron","passata","cebula","czosnek","papryka","bulion","ser żółty"]},
+  {id:33, cat:"🥘 Wariacje",  name:"Rolada gołąbkowa",                             link:"https://youtube.com/shorts/J1gRJ3ZP-_Y",  note:"",                         wiki:"Gołąbki",        q:"stuffed cabbage rolls polish tomato",     skladniki:["kapusta (liście)","mięso mielone","ryż","cebula","jajko","koncentrat pomidorowy","śmietana","majeranek"]},
+  {id:34, cat:"🥘 Wariacje",  name:"Pieczarki do wódki 🍺",                        link:"https://youtube.com/shorts/a3ubNmoELV4",  note:"Impreza!",                 wiki:"Pieczarka",      q:"sauteed mushrooms butter garlic cream",   skladniki:["pieczarki","masło","czosnek","śmietana","natka pietruszki","sół, pieprz"]},
+  {id:35, cat:"🥗 Sałatki",   name:"Sałatka z kiszonej kapusty",                  link:"https://youtube.com/shorts/xNhMwoV3LWA",  note:"",                         wiki:"Kapusta kiszona",q:"sauerkraut salad carrot apple polish",    skladniki:["kapusta kiszona","jabłko","marchew","cebula","cukier","olej","sół"]},
+  {id:36, cat:"🥗 Sałatki",   name:"Sałatka z buraczków",                         link:"https://youtube.com/shorts/QFKgQBv9YPg",  note:"",                         wiki:"Burak ćwikłowy", q:"beetroot salad polish cwikla food",       skladniki:["buraki ugotowane","cebula","ocet","cukier","sół","olej"]},
+  {id:37, cat:"🥗 Sałatki",   name:"Zajebista sałatka (polecam!)",                link:"https://youtube.com/shorts/iyFpl2mmhm4",  note:"Styczeń 2026",             wiki:"Sałatka",        q:"fresh colorful salad bowl vegetables",    skladniki:["🎬 Sprawdź film po dokładne składniki!"]},
+  {id:38, cat:"🥖 Pieczywo",  name:"Chleb",                                       link:"https://youtube.com/shorts/Hassw-uaCRM",  note:"",                         wiki:"Chleb",           q:"homemade bread loaf rustic artisan",      skladniki:["mąka pszenna","drożdże","woda letnia","sół","olej"]},
+  {id:39, cat:"🥖 Pieczywo",  name:"Lawasze do kebaba",                           link:"https://youtube.com/shorts/CIjooqxnWi0",  note:"",                         wiki:"Lawasz",          q:"lavash flatbread soft thin homemade",     skladniki:["mąka pszenna","woda letnia","drożdże","sół","olej"]},
+  {id:40, cat:"🥖 Pieczywo",  name:"Bułka do burgerów",                           link:"https://youtube.com/shorts/IifL_NqJwx8",  note:"",                         wiki:"",               q:"burger bun sesame brioche homemade",      skladniki:["mąka pszenna","drożdże","mleko","masło","jajko","cukier","sół","sezam"]},
 ];
 
 const ALL_CATS  = ["🐔 Kurczak","🥩 Schab","🥩 Karkówka","🐄 Wołowina","🌭 Kiełbasa","🐟 Ryba","🥘 Wariacje","🥗 Sałatki","🥖 Pieczywo"];
@@ -216,196 +209,109 @@ const catColors = {"🐔 Kurczak":"#fef3c7","🥩 Schab":"#fce7f3","🥩 Karków
 const catBorder = {"🐔 Kurczak":"#f59e0b","🥩 Schab":"#ec4899","🥩 Karkówka":"#f43f5e","🐄 Wołowina":"#ef4444","🌭 Kiełbasa":"#eab308","🐟 Ryba":"#3b82f6","🥘 Wariacje":"#10b981","🥗 Sałatki":"#059669","🥖 Pieczywo":"#d97706"};
 const catEmoji  = {"🐔 Kurczak":"🐔","🥩 Schab":"🥩","🥩 Karkówka":"🥩","🐄 Wołowina":"🐄","🌭 Kiełbasa":"🌭","🐟 Ryba":"🐟","🥘 Wariacje":"🥘","🥗 Sałatki":"🥗","🥖 Pieczywo":"🥖"};
 
-/* ─── Card Image — filmstrip hover ───────── */
-function CardImg({r, customUrl, adminMode, onPickRequest, onScrubRef}) {
-  const ytId  = getYTId(r.link);
+/* ─── Card Image ─────────────────────── */
+function CardImg({r, customUrl, adminMode, onPickRequest}) {
+  const ytId   = getYTId(r.link);
   const frames = ytId ? getYTFrames(ytId) : [];
   const N      = frames.length;
 
-  const [idx,       setIdx]      = useState(0);
-  const [hovered,   setHovered]  = useState(false);
-  const [ytFailed,  setYtFailed] = useState(false);
-  const [customErr, setCustomErr]= useState(false);
-  const intervalRef  = React.useRef(null);
-  const progressRef  = React.useRef(null);
-  const touchScrubbing = React.useRef(false);
-  // sync ref up to Card so it can suppress onClick
-  useEffect(()=>{ if(onScrubRef) onScrubRef.current = false; },[]);
-  const touchStartX    = React.useRef(0);
+  const [idx,      setIdx]      = useState(0);
+  const [active,   setActive]   = useState(false);
+  const [ytFailed, setYtFailed] = useState(false);
+  const [custErr,  setCustErr]  = useState(false);
+  const intervalRef = React.useRef(null);
+  const progressRef = React.useRef(null);
 
-  useEffect(()=>{setYtFailed(false);setCustomErr(false);setIdx(0);},[r.link,customUrl]);
+  const showCustom = !!(customUrl && !custErr);
+  const showYT     = !showCustom && !!(ytId && !ytFailed);
 
-  const showCustom = customUrl && !customErr;
-  const showYT     = !showCustom && ytId && !ytFailed;
+  useEffect(()=>{ setYtFailed(false); setCustErr(false); setIdx(0); setActive(false); },[r.link,customUrl]);
 
-  // Auto-cycle on hover (desktop)
   useEffect(()=>{
-    if(!showYT||!hovered) {
-      clearInterval(intervalRef.current);
-      if(!hovered) setIdx(0);
-      return;
-    }
-    const DURATION = 800;
-    const TICK = 30;
-    let elapsed = 0;
-    let curFrame = 0;
+    clearInterval(intervalRef.current);
+    if(!showYT || !active){ setIdx(0); return; }
+    const DURATION=800, TICK=30;
+    let elapsed=0, cur=0;
     intervalRef.current = setInterval(()=>{
       elapsed += TICK;
       if(progressRef.current)
-        progressRef.current.style.width = `${((curFrame+(elapsed/DURATION))/N)*100}%`;
-      if(elapsed >= DURATION){
-        elapsed = 0;
-        curFrame = (curFrame+1)%N;
-        setIdx(curFrame);
-      }
+        progressRef.current.style.width = `${((cur+(elapsed/DURATION))/N)*100}%`;
+      if(elapsed>=DURATION){ elapsed=0; cur=(cur+1)%N; setIdx(cur); }
     }, TICK);
     return ()=>clearInterval(intervalRef.current);
-  },[hovered, showYT, N]);
+  },[active, showYT]);
 
-  // ── Touch handlers ──────────────────────────
-  const handleTouchStart = e => {
-    if(!showYT) return;
-    touchScrubbing.current = false;
-    touchStartX.current = e.touches[0].clientX;
-    // preload: show frame 0, don't prevent default yet
-  };
+  const start = ()=>{ if(showYT) setActive(true); };
+  const stop  = ()=>{ if(showYT) setActive(false); };
 
-  const handleTouchMove = e => {
-    if(!showYT) return;
-    const dx = Math.abs(e.touches[0].clientX - touchStartX.current);
-    if(dx > 8) {
-      e.preventDefault();
-      e.stopPropagation();
-      touchScrubbing.current = true;
-      if(onScrubRef) onScrubRef.current = true;
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.touches[0].clientX - rect.left;
-      const zone = Math.min(N-1, Math.max(0, Math.floor((x/rect.width)*N)));
-      setIdx(zone);
-    }
-  };
-
-  const handleTouchEnd = e => {
-    if(touchScrubbing.current) {
-      e.preventDefault();
-      e.stopPropagation();
-      setTimeout(()=>{
-        touchScrubbing.current = false;
-        if(onScrubRef) onScrubRef.current = false;
-        setIdx(0);
-      }, 50);
-    }
-  };
-
-  const badge = showCustom ? {label:"własne",bg:"#6366f1"}
-              : showYT     ? {label:"▶ YT",  bg:"#ef4444"}
-              : null;
-
-  const labelText = frames[idx]?.label || "";
+  const badge = showCustom ? {l:"własne",bg:"#6366f1"} : showYT ? {l:"YT",bg:"#ef4444"} : null;
 
   return (
-    <div
-      style={{position:"relative",height:160,background:"#1e293b",
-        overflow:"hidden",flexShrink:0,userSelect:"none"}}
-      onMouseEnter={()=>setHovered(true)}
-      onMouseLeave={()=>{setHovered(false);setIdx(0);}}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
-      {/* ── custom image ── */}
-      {showCustom && (
-        <img src={customUrl} alt={r.name} onError={()=>setCustomErr(true)}
-          style={{width:"100%",height:160,objectFit:"cover",display:"block",
-            transition:"opacity .3s"}}/>
-      )}
+    <div style={{position:"relative",height:160,background:"#1e293b",overflow:"hidden",flexShrink:0}}
+      onMouseEnter={start} onMouseLeave={stop}
+      onTouchStart={start} onTouchEnd={stop}>
 
-      {/* ── YT frames: all rendered, cross-fade ── */}
-      {showYT && frames.map((f,i)=>(
+      {showCustom&&<img src={customUrl} alt={r.name} onError={()=>setCustErr(true)}
+        style={{width:"100%",height:160,objectFit:"cover",display:"block"}}/>}
+
+      {showYT&&frames.map((f,i)=>(
         <YTFrame key={i} src={f.hq} fallback={f.fb}
-          style={{position:"absolute",inset:0,width:"100%",height:160,
+          onError={()=>{ if(i===0) setYtFailed(true); }}
+          style={{position:"absolute",top:0,left:0,width:"100%",height:160,
             objectFit:"cover",display:"block",
-            opacity: idx===i ? 1 : 0,
-            transition:"opacity 0.2s ease"}}
-          onError={()=>{ if(i===0) setYtFailed(true); }}/>
+            opacity:idx===i?1:0,transition:"opacity 0.25s ease"}}/>
       ))}
 
-      {/* ── empty ── */}
-      {!showCustom && !showYT && (
-        <div style={{height:160,display:"flex",flexDirection:"column",
-          alignItems:"center",justifyContent:"center",gap:6,background:"#f1f5f9"}}>
+      {!showCustom&&!showYT&&(
+        <div style={{height:160,display:"flex",flexDirection:"column",alignItems:"center",
+          justifyContent:"center",gap:6,background:"#f1f5f9"}}>
           <span style={{fontSize:44}}>{catEmoji[r.cat]||"🍽️"}</span>
           {adminMode&&<span style={{fontSize:10,color:"#94a3b8"}}>kliknij 📷 aby dodać</span>}
         </div>
       )}
 
-      {/* ── filmstrip progress bar ── */}
-      {showYT && (
-        <div style={{position:"absolute",bottom:0,left:0,right:0,height:3,
-          background:"rgba(255,255,255,0.2)"}}>
-          <div ref={progressRef}
-            style={{height:"100%",background:"#ef4444",
-              width: hovered ? undefined : `${((idx+1)/N)*100}%`,
-              transition: hovered ? "none" : "width 0.2s"}}/>
+      {showYT&&(
+        <div style={{position:"absolute",bottom:0,left:0,right:0,height:3,background:"rgba(255,255,255,0.15)"}}>
+          <div ref={progressRef} style={{height:"100%",background:"#ef4444",
+            width:`${((idx+1)/N)*100}%`,transition:active?"none":"width 0.2s"}}/>
         </div>
       )}
 
-      {/* ── filmstrip dot indicators ── */}
-      {showYT && (
-        <div style={{position:"absolute",bottom:8,left:"50%",
-          transform:"translateX(-50%)",display:"flex",gap:5,pointerEvents:"none"}}>
+      {showYT&&(
+        <div style={{position:"absolute",bottom:8,left:"50%",transform:"translateX(-50%)",
+          display:"flex",gap:5,pointerEvents:"none"}}>
           {frames.map((_,i)=>(
-            <div key={i} style={{
-              width: idx===i ? 20 : 6,
-              height:6,borderRadius:3,
-              background: idx===i?"#ef4444":"rgba(255,255,255,0.5)",
-              transition:"all 0.25s ease",boxShadow:"0 1px 3px rgba(0,0,0,0.5)"}}/>
+            <div key={i} style={{width:idx===i?20:6,height:6,borderRadius:3,
+              background:idx===i?"#ef4444":"rgba(255,255,255,0.45)",
+              transition:"all 0.25s",boxShadow:"0 1px 3px rgba(0,0,0,0.5)"}}/>
           ))}
         </div>
       )}
 
-      {/* ── label ── */}
-      {showYT && (hovered||idx>0) && (
-        <div style={{position:"absolute",top:8,left:8,
-          background:"rgba(0,0,0,0.72)",color:"#fff",borderRadius:6,
-          padding:"2px 8px",fontSize:10,fontWeight:700,
-          backdropFilter:"blur(4px)",transition:"opacity .2s",
-          opacity: hovered||idx>0 ? 1 : 0}}>
-          {labelText}
+      {showYT&&active&&(
+        <div style={{position:"absolute",top:8,left:8,background:"rgba(0,0,0,0.7)",
+          color:"#fff",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,
+          backdropFilter:"blur(4px)"}}>
+          {frames[idx]?.label||""}
         </div>
       )}
 
-      {/* ── mobile hint (only when idle) ── */}
-      {showYT && !hovered && idx===0 && (
-        <div style={{position:"absolute",bottom:20,left:"50%",
-          transform:"translateX(-50%)",
-          background:"rgba(0,0,0,0.5)",color:"#fff",borderRadius:6,
-          padding:"2px 8px",fontSize:9,fontWeight:600,
-          whiteSpace:"nowrap",backdropFilter:"blur(4px)"}}>
-          👆 przesuń / najedź
+      {badge&&(
+        <div style={{position:"absolute",top:8,right:44,background:badge.bg,color:"#fff",
+          borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:800,backdropFilter:"blur(4px)"}}>
+          {badge.l}
         </div>
       )}
 
-      {/* ── source badge ── */}
-      {badge && (
-        <div style={{position:"absolute",top:8,right:44,background:badge.bg,
-          color:"#fff",borderRadius:6,padding:"2px 7px",
-          fontSize:10,fontWeight:800,backdropFilter:"blur(4px)"}}>
-          {badge.label}
-        </div>
-      )}
-
-      <a href={r.link} target="_blank" rel="noreferrer"
-        onClick={e=>e.stopPropagation()}
-        style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,0.65)",
-          color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,
-          fontWeight:700,textDecoration:"none",backdropFilter:"blur(4px)"}}>▶</a>
+      <a href={r.link} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
+        style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,0.65)",color:"#fff",
+          borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,
+          textDecoration:"none",backdropFilter:"blur(4px)"}}>▶</a>
 
       {adminMode&&(
         <button onClick={e=>{e.stopPropagation();onPickRequest();}}
-          style={{position:"absolute",bottom:14,left:8,
-            background:"rgba(99,102,241,0.9)",color:"#fff",border:"none",
-            borderRadius:8,padding:"5px 10px",fontSize:11,
+          style={{position:"absolute",bottom:12,left:8,background:"rgba(99,102,241,0.9)",
+            color:"#fff",border:"none",borderRadius:8,padding:"5px 10px",fontSize:11,
             fontWeight:700,cursor:"pointer",backdropFilter:"blur(4px)"}}>
           📷 Zmień
         </button>
@@ -414,7 +320,7 @@ function CardImg({r, customUrl, adminMode, onPickRequest, onScrubRef}) {
   );
 }
 
-/* ─── Image Picker ────────────────────── */
+/* ─── Image Picker ───────────────────── */
 function ImagePicker({recipe, keys, onPick, onClose}) {
   const [tab,      setTab]      = useState("youtube");
   const [query,    setQuery]    = useState(recipe.q);
@@ -423,12 +329,11 @@ function ImagePicker({recipe, keys, onPick, onClose}) {
   const [error,    setError]    = useState("");
   const [selected, setSelected] = useState(null);
   const [manualUrl,setManual]   = useState("");
+  const ytId    = getYTId(recipe.link);
+  const ytThumbs= getYTThumbs(recipe.link);
 
-  const ytId = getYTId(recipe.link);
-  const ytThumbs = getYTThumbs(recipe.link);
-
-  const search = async (src, q) => {
-    if (src==="youtube"||src==="manual") return;
+  const search = async (src,q) => {
+    if(src==="youtube"||src==="manual") return;
     setLoading(true); setError(""); setResults([]); setSelected(null);
     try {
       let imgs=[];
@@ -437,18 +342,18 @@ function ImagePicker({recipe, keys, onPick, onClose}) {
       else if(src==="pexels")   imgs=await fetchPexels(q,keys.pexels);
       setResults(imgs);
       if(!imgs.length) setError("Brak wyników — spróbuj innych słów.");
-    } catch(e){setError(e.message);}
-    finally{setLoading(false);}
+    } catch(e){ setError(e.message); }
+    finally{ setLoading(false); }
   };
 
   useEffect(()=>{ if(tab!=="youtube"&&tab!=="manual") search(tab,query); },[tab]);
 
-  const TABS = [
-    {id:"youtube",   label:"🎬 YouTube", free:true},
-    {id:"wikimedia", label:"🌐 Wiki",    free:true},
-    {id:"unsplash",  label:"📷 Unsplash",free:false},
-    {id:"pexels",    label:"🖼️ Pexels",  free:false},
-    {id:"manual",    label:"🔗 URL",     free:true},
+  const TABS=[
+    {id:"youtube",  label:"🎬 YouTube", free:true},
+    {id:"wikimedia",label:"🌐 Wiki",    free:true},
+    {id:"unsplash", label:"📷 Unsplash",free:false},
+    {id:"pexels",   label:"🖼️ Pexels",  free:false},
+    {id:"manual",   label:"🔗 URL",     free:true},
   ];
 
   return (
@@ -462,77 +367,59 @@ function ImagePicker({recipe, keys, onPick, onClose}) {
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#94a3b8"}}>✕</button>
         </div>
 
-        {/* tabs */}
         <div style={{display:"flex",gap:3,marginBottom:14,background:"#f1f5f9",borderRadius:12,padding:4}}>
           {TABS.map(t=>(
             <button key={t.id} className="tab-btn" onClick={()=>setTab(t.id)}
               style={{background:tab===t.id?"#fff":"transparent",
                 color:tab===t.id?"#1e293b":"#64748b",
                 boxShadow:tab===t.id?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>
-              {t.label}
-              {t.free&&<span style={{fontSize:8,color:"#16a34a",marginLeft:2,fontWeight:900}}>FREE</span>}
+              {t.label}{t.free&&<span style={{fontSize:8,color:"#16a34a",marginLeft:2,fontWeight:900}}>FREE</span>}
             </button>
           ))}
         </div>
 
-        {/* ── YouTube tab ── */}
-        {tab==="youtube" && (
-          <div>
-            {ytId ? (<>
-              <div style={{fontSize:13,color:"#475569",marginBottom:12,padding:"8px 10px",
-                background:"#fef9c3",borderRadius:8,border:"1px solid #fde68a"}}>
-                🎬 Miniatura pobrana automatycznie z Twojego filmu YouTube — to dokładnie to danie!<br/>
-                Wybierz jakość:
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:16}}>
-                {ytThumbs.map((t,i)=>(
-                  <div key={i} style={{position:"relative"}}>
-                    <img src={t.thumb} alt={t.label}
-                      className={"thumb"+(selected===i?" sel":"")}
-                      style={{aspectRatio:"16/9"}}
-                      onClick={()=>setSelected(i)}
-                      onError={e=>e.target.closest("div").style.opacity=".3"}/>
-                    <div style={{fontSize:11,color:"#64748b",marginTop:3,textAlign:"center"}}>{t.label}</div>
-                    {selected===i&&(
-                      <div style={{position:"absolute",top:6,left:6,background:"#22c55e",borderRadius:"50%",
-                        width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",
-                        fontSize:14,color:"#fff",fontWeight:800}}>✓</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </>) : (
-              <div style={{padding:"20px",textAlign:"center",color:"#94a3b8",fontSize:13}}>
-                ⚠️ Ten przepis ma link do Facebooka — miniatura YouTube niedostępna.<br/>
-                Użyj innego źródła (Wiki, Unsplash, URL).
-              </div>
-            )}
-          </div>
+        {tab==="youtube"&&(
+          ytId ? (<>
+            <div style={{fontSize:13,color:"#475569",marginBottom:12,padding:"8px 10px",
+              background:"#fef9c3",borderRadius:8,border:"1px solid #fde68a"}}>
+              🎬 Miniatura z Twojego filmu — wybierz jakość:
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:16}}>
+              {ytThumbs.map((t,i)=>(
+                <div key={i} style={{position:"relative"}}>
+                  <img src={t.thumb} alt={t.label} className={"thumb"+(selected===i?" sel":"")}
+                    style={{aspectRatio:"16/9"}} onClick={()=>setSelected(i)}
+                    onError={e=>e.target.closest("div").style.opacity=".3"}/>
+                  <div style={{fontSize:11,color:"#64748b",marginTop:3,textAlign:"center"}}>{t.label}</div>
+                  {selected===i&&<div style={{position:"absolute",top:6,left:6,background:"#22c55e",
+                    borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",
+                    justifyContent:"center",fontSize:14,color:"#fff",fontWeight:800}}>✓</div>}
+                </div>
+              ))}
+            </div>
+          </>) : (
+            <div style={{padding:"20px",textAlign:"center",color:"#94a3b8",fontSize:13}}>
+              ⚠️ Ten przepis ma link do Facebooka — brak miniatury YouTube.<br/>Użyj innego źródła.
+            </div>
+          )
         )}
 
-        {/* ── Search tabs (wiki/unsplash/pexels) ── */}
-        {tab!=="youtube"&&tab!=="manual" && (<>
+        {tab!=="youtube"&&tab!=="manual"&&(<>
           <div style={{display:"flex",gap:8,marginBottom:12}}>
             <input value={query} onChange={e=>setQuery(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&search(tab,query)}
-              placeholder="Szukaj po polsku lub angielsku..."/>
-            <button onClick={()=>search(tab,query)} className="btn btn-primary" style={{whiteSpace:"nowrap"}}>
-              🔍 Szukaj
-            </button>
+              onKeyDown={e=>e.key==="Enter"&&search(tab,query)} placeholder="Szukaj..."/>
+            <button onClick={()=>search(tab,query)} className="btn btn-primary" style={{whiteSpace:"nowrap"}}>🔍</button>
           </div>
-          {(tab==="unsplash"&&!keys.unsplash)||(tab==="pexels"&&!keys.pexels) ? (
+          {((tab==="unsplash"&&!keys.unsplash)||(tab==="pexels"&&!keys.pexels))&&(
             <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:8,
               padding:"10px 12px",fontSize:12,color:"#9a3412",marginBottom:8}}>
-              ⚠️ Brak klucza API. Zamknij → ⚙️ Edytuj → 🔑 Klucze API.
-            </div>
-          ) : null}
-          {loading && (
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-              {Array(9).fill(0).map((_,i)=><div key={i} className="skeleton" style={{aspectRatio:"4/3",borderRadius:8}}/>)}
+              ⚠️ Brak klucza API. Wejdź w ⚙️ → 🔑 Klucze API.
             </div>
           )}
-          {error&&<div style={{color:"#f59e0b",fontSize:13,padding:"10px 12px",background:"#fffbeb",
-            borderRadius:8,border:"1px solid #fde68a",marginBottom:8}}>{error}</div>}
+          {loading&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+            {Array(9).fill(0).map((_,i)=><div key={i} className="skeleton" style={{aspectRatio:"4/3",borderRadius:8}}/>)}
+          </div>}
+          {error&&<div style={{color:"#f59e0b",fontSize:13,padding:"10px 12px",background:"#fffbeb",borderRadius:8,border:"1px solid #fde68a",marginBottom:8}}>{error}</div>}
           {!loading&&results.length>0&&(
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
               {results.map((img,i)=>(
@@ -540,48 +427,37 @@ function ImagePicker({recipe, keys, onPick, onClose}) {
                   <img src={img.thumb} alt="" className={"thumb"+(selected===i?" sel":"")}
                     onClick={()=>setSelected(i)}
                     onError={e=>e.target.closest("div").style.display="none"}/>
-                  {selected===i&&(
-                    <div style={{position:"absolute",top:6,left:6,background:"#22c55e",borderRadius:"50%",
-                      width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",
-                      fontSize:14,color:"#fff",fontWeight:800}}>✓</div>
-                  )}
+                  {selected===i&&<div style={{position:"absolute",top:6,left:6,background:"#22c55e",
+                    borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",
+                    justifyContent:"center",fontSize:14,color:"#fff",fontWeight:800}}>✓</div>}
                 </div>
               ))}
             </div>
           )}
         </>)}
 
-        {/* ── Manual URL tab ── */}
         {tab==="manual"&&(
           <div>
             <p style={{fontSize:13,color:"#475569",marginBottom:10,lineHeight:1.6}}>
-              Znajdź zdjęcie na <b>kwestiasmaku.com</b>, Google Images lub gdziekolwiek.<br/>
+              Znajdź zdjęcie na <b>kwestiasmaku.com</b> lub Google Images.<br/>
               <b>Prawy klik → "Kopiuj adres obrazu"</b> → wklej poniżej.
             </p>
             <input value={manualUrl} onChange={e=>setManual(e.target.value)} placeholder="https://..."/>
-            {manualUrl&&(
-              <div style={{marginTop:10,borderRadius:10,overflow:"hidden",border:"2px solid #e2e8f0"}}>
-                <img src={manualUrl} alt="podgląd"
-                  style={{width:"100%",maxHeight:180,objectFit:"cover",display:"block"}}
-                  onError={e=>e.target.style.display="none"}/>
-              </div>
-            )}
+            {manualUrl&&<div style={{marginTop:10,borderRadius:10,overflow:"hidden",border:"2px solid #e2e8f0"}}>
+              <img src={manualUrl} alt="podgląd"
+                style={{width:"100%",maxHeight:180,objectFit:"cover",display:"block"}}
+                onError={e=>e.target.style.display="none"}/>
+            </div>}
           </div>
         )}
 
-        {/* footer */}
         <div style={{display:"flex",gap:8,marginTop:14,borderTop:"1px solid #f1f5f9",paddingTop:14}}>
           {tab==="manual"
             ? <button className="btn btn-primary" style={{flex:1,opacity:!manualUrl?.4:1}}
-                disabled={!manualUrl.trim()} onClick={()=>onPick(manualUrl.trim())}>
-                ✅ Ustaw URL
-              </button>
+                disabled={!manualUrl.trim()} onClick={()=>onPick(manualUrl.trim())}>✅ Ustaw URL</button>
             : <button className="btn btn-primary" style={{flex:1,opacity:selected===null?.4:1}}
                 disabled={selected===null}
-                onClick={()=>{
-                  if(tab==="youtube") onPick(ytThumbs[selected].full);
-                  else onPick(results[selected].full);
-                }}>
+                onClick={()=>{ if(tab==="youtube") onPick(ytThumbs[selected].full); else onPick(results[selected].full); }}>
                 ✅ Ustaw to zdjęcie
               </button>
           }
@@ -592,7 +468,7 @@ function ImagePicker({recipe, keys, onPick, onClose}) {
   );
 }
 
-/* ─── Keys Modal ──────────────────────── */
+/* ─── Keys Modal ─────────────────────── */
 function KeysModal({keys, onSave, onClose}) {
   const [u,setU]=useState(keys.unsplash||"");
   const [p,setP]=useState(keys.pexels||"");
@@ -600,32 +476,29 @@ function KeysModal({keys, onSave, onClose}) {
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <h2 style={{fontSize:18,fontWeight:800}}>🔑 Klucze API</h2>
+          <h2 style={{fontSize:18,fontWeight:800}}>🔑 Klucze API (zdjęcia)</h2>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#94a3b8"}}>✕</button>
         </div>
         <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:12,marginBottom:12}}>
-          <b style={{color:"#0369a1"}}>🎬 YouTube + 🌐 Wikimedia + 🔗 URL</b>
-          <div style={{fontSize:12,color:"#0369a1",marginTop:4}}>W 100% darmowe, bez klucza — działają od razu.</div>
+          <b style={{color:"#0369a1"}}>🎬 YouTube + 🌐 Wikimedia + 🔗 URL — darmowe, bez klucza</b>
         </div>
         <div style={{background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:10,padding:12,marginBottom:12}}>
-          <b style={{color:"#6d28d9"}}>📷 Unsplash API Key</b>
-          <div style={{fontSize:12,color:"#7c3aed",margin:"6px 0"}}>
-            <a href="https://unsplash.com/developers" target="_blank" style={{color:"#6d28d9"}}>unsplash.com/developers</a> → Register → New Application → Access Key
+          <b style={{color:"#6d28d9"}}>📷 Unsplash</b>
+          <div style={{fontSize:12,color:"#7c3aed",margin:"4px 0 8px"}}>
+            <a href="https://unsplash.com/developers" target="_blank" style={{color:"#6d28d9"}}>unsplash.com/developers</a> → New Application → Access Key
           </div>
           <input value={u} onChange={e=>setU(e.target.value)} placeholder="Unsplash Access Key..."/>
         </div>
         <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:12,marginBottom:16}}>
-          <b style={{color:"#166534"}}>🖼️ Pexels API Key</b>
-          <div style={{fontSize:12,color:"#15803d",margin:"6px 0"}}>
+          <b style={{color:"#166534"}}>🖼️ Pexels</b>
+          <div style={{fontSize:12,color:"#15803d",margin:"4px 0 8px"}}>
             <a href="https://www.pexels.com/api/" target="_blank" style={{color:"#166534"}}>pexels.com/api</a> → Get Started → API Key
           </div>
           <input value={p} onChange={e=>setP(e.target.value)} placeholder="Pexels API Key..."/>
         </div>
         <div style={{display:"flex",gap:8}}>
           <button className="btn btn-primary" style={{flex:1}}
-            onClick={()=>{onSave({unsplash:u.trim(),pexels:p.trim()});onClose();}}>
-            💾 Zapisz
-          </button>
+            onClick={()=>{onSave({unsplash:u.trim(),pexels:p.trim()});onClose();}}>💾 Zapisz</button>
           <button className="btn" onClick={onClose} style={{background:"#f1f5f9",color:"#475569"}}>Anuluj</button>
         </div>
       </div>
@@ -633,7 +506,7 @@ function KeysModal({keys, onSave, onClose}) {
   );
 }
 
-/* ─── Recipe Modal ────────────────────── */
+/* ─── Recipe Modal ───────────────────── */
 function RecipeModal({recipe, onSave, onClose}) {
   const empty={name:"",cat:"🐔 Kurczak",link:"",note:"",wiki:"",q:"",skladniki:[""]};
   const [f,setF]=useState(recipe?{...recipe,skladniki:[...recipe.skladniki]}:empty);
@@ -642,8 +515,7 @@ function RecipeModal({recipe, onSave, onClose}) {
   const addSk=()=>setF(p=>({...p,skladniki:[...p.skladniki,""]}));
   const delSk=i=>setF(p=>{const s=p.skladniki.filter((_,j)=>j!==i);return{...p,skladniki:s.length?s:[""]}});
   const submit=()=>{if(!f.name.trim())return alert("Podaj nazwę!");onSave({...f,skladniki:f.skladniki.filter(s=>s.trim())});};
-  // preview YT thumb
-  const ytId = getYTId(f.link);
+  const ytId=getYTId(f.link);
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={e=>e.stopPropagation()}>
@@ -658,19 +530,17 @@ function RecipeModal({recipe, onSave, onClose}) {
         </select>
         <label>Link do filmu (YouTube = auto miniatura!)</label>
         <input value={f.link} onChange={e=>set("link",e.target.value)} placeholder="https://youtube.com/shorts/..."/>
-        {ytId && (
-          <div style={{marginTop:8,borderRadius:8,overflow:"hidden",border:"2px solid #22c55e"}}>
-            <img src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`} alt="miniatura"
-              style={{width:"100%",maxHeight:120,objectFit:"cover",display:"block"}}/>
-            <div style={{fontSize:11,color:"#16a34a",padding:"4px 8px",background:"#f0fdf4",fontWeight:700}}>
-              ✅ Miniatura YouTube wykryta — zdjęcie automatyczne!
-            </div>
+        {ytId&&<div style={{marginTop:8,borderRadius:8,overflow:"hidden",border:"2px solid #22c55e"}}>
+          <img src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`} alt="miniatura"
+            style={{width:"100%",maxHeight:120,objectFit:"cover",display:"block"}}/>
+          <div style={{fontSize:11,color:"#16a34a",padding:"4px 8px",background:"#f0fdf4",fontWeight:700}}>
+            ✅ Miniatura YouTube wykryta!
           </div>
-        )}
+        </div>}
         <label>Notatka</label><input value={f.note} onChange={e=>set("note",e.target.value)}/>
         <label>Tytuł artykułu pl.Wikipedia (opcjonalnie)</label>
         <input value={f.wiki||""} onChange={e=>set("wiki",e.target.value)} placeholder="np. Zrazy, Gołąbki"/>
-        <label>Słowa do szukania zdjęcia (fallback)</label>
+        <label>Słowa do szukania zdjęcia</label>
         <input value={f.q} onChange={e=>set("q",e.target.value)} placeholder="np. kurczak sos cebulowy"/>
         <label>Składniki</label>
         {f.skladniki.map((s,i)=>(
@@ -679,8 +549,7 @@ function RecipeModal({recipe, onSave, onClose}) {
             <button className="btn btn-danger btn-sm" onClick={()=>delSk(i)} style={{flexShrink:0}}>✕</button>
           </div>
         ))}
-        <button className="btn btn-sm" onClick={addSk}
-          style={{background:"#f1f5f9",color:"#475569",width:"100%",marginTop:4}}>+ Dodaj składnik</button>
+        <button className="btn btn-sm" onClick={addSk} style={{background:"#f1f5f9",color:"#475569",width:"100%",marginTop:4}}>+ Dodaj składnik</button>
         <div style={{display:"flex",gap:8,marginTop:20}}>
           <button className="btn btn-primary" onClick={submit} style={{flex:1}}>{recipe?"💾 Zapisz":"➕ Dodaj"}</button>
           <button className="btn" onClick={onClose} style={{background:"#f1f5f9",color:"#475569"}}>Anuluj</button>
@@ -690,19 +559,16 @@ function RecipeModal({recipe, onSave, onClose}) {
   );
 }
 
-/* ─── Card ────────────────────────────── */
+/* ─── Card ───────────────────────────── */
 function Card({r, expanded, onToggle, onEdit, onDelete, adminMode, customUrl, onPickRequest}) {
   const b=catBorder[r.cat]||"#6366f1";
-  const scrubRef = React.useRef(false);
-  const handleToggle = () => { if(scrubRef.current) return; onToggle(); };
   return (
-    <div onClick={handleToggle}
+    <div onClick={onToggle}
       style={{background:catColors[r.cat]||"#fff",borderRadius:14,cursor:"pointer",overflow:"hidden",
         display:"flex",flexDirection:"column",
         border:`2px solid ${expanded?b:"transparent"}`,
         boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}>
-      <CardImg r={r} customUrl={customUrl} adminMode={adminMode}
-        onPickRequest={onPickRequest} onScrubRef={scrubRef}/>
+      <CardImg r={r} customUrl={customUrl} adminMode={adminMode} onPickRequest={onPickRequest}/>
       <div style={{padding:"12px 14px 10px",flex:1}}>
         <div style={{fontWeight:700,fontSize:14,color:"#1e293b",lineHeight:1.4}}>{r.name}</div>
         {r.note&&<span style={{fontSize:11,color:"#64748b",background:"rgba(0,0,0,0.06)",
@@ -712,8 +578,7 @@ function Card({r, expanded, onToggle, onEdit, onDelete, adminMode, customUrl, on
       {expanded&&(
         <div style={{padding:"0 14px 10px"}}>
           <div style={{background:"rgba(255,255,255,0.7)",borderRadius:10,padding:"10px 12px"}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#475569",marginBottom:6,
-              textTransform:"uppercase",letterSpacing:".5px"}}>Składniki:</div>
+            <div style={{fontSize:11,fontWeight:700,color:"#475569",marginBottom:6,textTransform:"uppercase",letterSpacing:".5px"}}>Składniki:</div>
             {r.skladniki.map((s,i)=>(
               <div key={i} style={{fontSize:13,color:"#1e293b",padding:"3px 0",display:"flex",gap:6}}>
                 <span style={{color:b,fontWeight:700,flexShrink:0}}>•</span>{s}
@@ -724,32 +589,141 @@ function Card({r, expanded, onToggle, onEdit, onDelete, adminMode, customUrl, on
       )}
       {adminMode&&(
         <div style={{display:"flex",gap:6,padding:"0 14px 12px"}} onClick={e=>e.stopPropagation()}>
-          <button className="btn btn-sm" onClick={onEdit}
-            style={{flex:1,background:"#e0e7ff",color:"#4338ca"}}>✏️ Edytuj</button>
-          <button className="btn btn-danger btn-sm"
-            onClick={()=>confirm("Usunąć?")&&onDelete()} style={{flex:1}}>🗑️ Usuń</button>
+          <button className="btn btn-sm" onClick={onEdit} style={{flex:1,background:"#e0e7ff",color:"#4338ca"}}>✏️ Edytuj</button>
+          <button className="btn btn-danger btn-sm" onClick={()=>confirm("Usunąć?")&&onDelete()} style={{flex:1}}>🗑️ Usuń</button>
         </div>
       )}
     </div>
   );
 }
 
-/* ─── App ─────────────────────────────── */
+/* ─── YouTube Banner (no key) ────────── */
+function YTKeyBanner({onSave}) {
+  const [k,setK]=useState("");
+  return (
+    <div style={{maxWidth:980,margin:"0 auto 20px",padding:"0 16px"}}>
+      <div style={{background:"linear-gradient(135deg,#eff6ff,#dbeafe)",border:"2px solid #3b82f6",borderRadius:14,padding:20}}>
+        <div style={{fontSize:18,marginBottom:8}}>📺 Podobne przepisy z YouTube</div>
+        <p style={{fontSize:13,color:"#1e40af",lineHeight:1.7,marginBottom:12}}>
+          Potrzebujesz <b>darmowego klucza YouTube Data API v3</b> (bez karty):
+        </p>
+        <ol style={{fontSize:13,color:"#1e40af",paddingLeft:18,lineHeight:2.2,marginBottom:12}}>
+          <li>Wejdź na <a href="https://console.cloud.google.com" target="_blank" style={{color:"#1d4ed8",fontWeight:700}}>console.cloud.google.com</a></li>
+          <li>Nowy projekt → <b>Włącz interfejsy API</b> → <b>YouTube Data API v3</b> → Włącz</li>
+          <li><b>Dane logowania</b> → Utwórz dane → <b>Klucz API</b> → skopiuj</li>
+          <li>Wklej poniżej →</li>
+        </ol>
+        <div style={{fontSize:12,color:"#3b82f6",marginBottom:10}}>💡 Darmowy limit: ~100 wyszukań/dzień</div>
+        <div style={{display:"flex",gap:8}}>
+          <input value={k} onChange={e=>setK(e.target.value)} placeholder="Wklej klucz YouTube Data API v3..."
+            style={{flex:1,border:"2px solid #3b82f6",background:"#eff6ff",padding:"9px 12px",borderRadius:8}}/>
+          <button onClick={()=>k.trim()&&onSave(k.trim())}
+            style={{background:"#3b82f6",color:"#fff",border:"none",borderRadius:8,
+              padding:"9px 18px",fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}>Zapisz →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Similar Recipes ────────────────── */
+function SimilarRecipes({recipe, ytKey}) {
+  const [rows,     setRows]    = useState([]);
+  const [loading,  setLoading] = useState(false);
+  const [error,    setError]   = useState("");
+  const [lastId,   setLastId]  = useState(null);
+
+  useEffect(()=>{
+    if(!ytKey||!recipe||recipe.id===lastId) return;
+    let cancelled=false;
+    const run = async ()=>{
+      setLoading(true); setError(""); setRows([]);
+      try {
+        let chMap = gs(KCH)||{};
+        for(const ch of YT_CHANNELS) {
+          if(!chMap[ch.handle]) {
+            const id = await resolveHandle(ch.handle, ytKey);
+            if(id) chMap[ch.handle]=id;
+          }
+        }
+        ss(KCH, chMap);
+        if(cancelled) return;
+        const q = recipe.name.replace(/[🎬✅😄😅🍺]/g,"").trim();
+        const out=[];
+        for(const ch of YT_CHANNELS) {
+          const cid=chMap[ch.handle]; if(!cid) continue;
+          const vids=await ytSearch(q,cid,ytKey);
+          if(vids.length) out.push({label:ch.label,videos:vids});
+          if(cancelled) return;
+        }
+        setRows(out); setLastId(recipe.id);
+        if(!out.length) setError("Brak wyników dla tego przepisu w wybranych kanałach.");
+      } catch(e){ if(!cancelled) setError("Błąd API: "+e.message); }
+      finally{ if(!cancelled) setLoading(false); }
+    };
+    run();
+    return()=>{cancelled=true;};
+  },[recipe?.id, ytKey]);
+
+  if(!ytKey||!recipe) return null;
+
+  return (
+    <div style={{maxWidth:980,margin:"0 auto",padding:"0 16px 32px"}}>
+      <div style={{borderTop:"2px solid #e2e8f0",paddingTop:24}}>
+        <h2 style={{fontSize:18,fontWeight:800,color:"#1e293b",marginBottom:4}}>📺 Podobne przepisy na YouTube</h2>
+        <p style={{fontSize:12,color:"#94a3b8",marginBottom:16}}>
+          „<b style={{color:"#475569"}}>{recipe.name}</b>" — thefoodini · Kocham Gotować · Mrgiboneg · Strzelczyk
+        </p>
+        {loading&&(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
+            {Array(8).fill(0).map((_,i)=><div key={i} className="skeleton" style={{borderRadius:12,height:140}}/>)}
+          </div>
+        )}
+        {error&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#9a3412"}}>{error}</div>}
+        {!loading&&rows.map(row=>(
+          <div key={row.label} style={{marginBottom:20}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#6366f1",marginBottom:10}}>
+              <span style={{background:"#e0e7ff",borderRadius:6,padding:"2px 8px"}}>📺 {row.label}</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
+              {row.videos.map(v=>(
+                <a key={v.id} href={v.url} target="_blank" rel="noreferrer"
+                  style={{textDecoration:"none",borderRadius:12,overflow:"hidden",
+                    background:"#fff",boxShadow:"0 2px 8px rgba(0,0,0,0.08)",display:"block"}}>
+                  <img src={v.thumb} alt={v.title} style={{width:"100%",aspectRatio:"16/9",objectFit:"cover",display:"block"}}/>
+                  <div style={{padding:"8px 10px 10px",fontSize:12,fontWeight:700,color:"#1e293b",
+                    lineHeight:1.4,display:"-webkit-box",WebkitLineClamp:2,
+                    WebkitBoxOrient:"vertical",overflow:"hidden"}}>
+                    {v.title}
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── App ────────────────────────────── */
 function App() {
-  const [recipes,   setRecipes]   = useState(()=>gs(KR)||DR);
-  const [chosen,    setChosen]    = useState(()=>gs(KI)||{});
-  const [keys,      setKeys]      = useState(()=>gs(KK)||{unsplash:"",pexels:""});
-  const [activeCat, setActiveCat] = useState("Wszystkie");
-  const [expanded,  setExpanded]  = useState(null);
-  const [search,    setSearch]    = useState("");
-  const [adminMode, setAdminMode] = useState(false);
-  const [editModal, setEditModal] = useState(null);
-  const [picker,    setPicker]    = useState(null);
-  const [keysModal, setKeysModal] = useState(false);
+  const [recipes,   setRecipes]  = useState(()=>gs(KR)||DR);
+  const [chosen,    setChosen]   = useState(()=>gs(KI)||{});
+  const [keys,      setKeys]     = useState(()=>gs(KK)||{unsplash:"",pexels:""});
+  const [ytKey,     setYtKey]    = useState(()=>gs(KYT)||"");
+  const [activeCat, setActiveCat]= useState("Wszystkie");
+  const [expanded,  setExpanded] = useState(null);
+  const [search,    setSearch]   = useState("");
+  const [adminMode, setAdminMode]= useState(false);
+  const [editModal, setEditModal]= useState(null);
+  const [picker,    setPicker]   = useState(null);
+  const [keysModal, setKeysModal]= useState(false);
 
   useEffect(()=>ss(KR,recipes),[recipes]);
   useEffect(()=>ss(KI,chosen),[chosen]);
   useEffect(()=>ss(KK,keys),[keys]);
+  useEffect(()=>ss(KYT,ytKey),[ytKey]);
 
   const handlePick=(id,url)=>{setChosen(c=>({...c,[id]:url}));setPicker(null);};
   const addOrUpdate=form=>{
@@ -768,20 +742,24 @@ function App() {
   const grouped={};
   filtered.forEach(r=>{if(!grouped[r.cat])grouped[r.cat]=[];grouped[r.cat].push(r);});
 
+  const expandedRecipe = recipes.find(r=>r.id===expanded)||null;
+
   return (
     <div style={{fontFamily:"'Segoe UI',sans-serif",background:"#f8fafc",minHeight:"100vh",paddingBottom:40}}>
+
+      {/* Header */}
       <div style={{background:"linear-gradient(135deg,#1e293b,#334155)",color:"white",padding:"24px 20px 20px"}}>
         <div style={{maxWidth:980,margin:"0 auto"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
             <div>
               <h1 style={{fontSize:26,fontWeight:800,letterSpacing:"-0.5px"}}>🍳 Moja Baza Przepisów</h1>
-              <p style={{margin:"4px 0 0",opacity:.7,fontSize:13}}>{recipes.length} przepisów · miniatury z YouTube automatycznie</p>
+              <p style={{margin:"4px 0 0",opacity:.7,fontSize:13}}>{recipes.length} przepisów</p>
             </div>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               {adminMode&&<>
                 <button className="btn" onClick={()=>setEditModal("new")} style={{background:"#22c55e",color:"#fff"}}>➕ Nowy</button>
-                <button className="btn btn-sm" onClick={()=>setKeysModal(true)}
-                  style={{background:"rgba(255,255,255,0.12)",color:"#fff"}}>🔑 Klucze API</button>
+                <button className="btn btn-sm" onClick={()=>setKeysModal(true)} style={{background:"rgba(255,255,255,0.12)",color:"#fff"}}>🔑 Klucze API</button>
+                {ytKey&&<button className="btn btn-sm" onClick={()=>{ss(KYT,"");setYtKey("");}} style={{background:"rgba(255,255,255,0.12)",color:"#fff"}}>📺 Zmień YT klucz</button>}
               </>}
               <button className="btn" onClick={()=>setAdminMode(a=>!a)}
                 style={{background:adminMode?"#f59e0b":"rgba(255,255,255,0.15)",color:adminMode?"#1e293b":"#fff"}}>
@@ -789,17 +767,13 @@ function App() {
               </button>
             </div>
           </div>
-          {adminMode&&(
-            <div style={{marginTop:10,padding:"9px 12px",background:"rgba(239,68,68,0.15)",
-              borderRadius:8,border:"1px solid rgba(239,68,68,0.3)",fontSize:12,color:"#fca5a5"}}>
-              🎬 Miniatury YouTube ładują się automatycznie. Kliknij <b>📷 Zmień zdjęcie</b> aby wybrać inne źródło.
-            </div>
-          )}
           <input value={search} onChange={e=>setSearch(e.target.value)}
             placeholder="🔍 Szukaj przepisu lub składnika..."
             style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"none",fontSize:14,outline:"none",marginTop:14}}/>
         </div>
       </div>
+
+      {/* Kategorie */}
       <div style={{background:"#1e293b",padding:"0 20px 14px"}}>
         <div style={{maxWidth:980,margin:"0 auto",display:"flex",gap:8,flexWrap:"wrap",paddingTop:12}}>
           {cats.map(c=>(
@@ -812,9 +786,10 @@ function App() {
           ))}
         </div>
       </div>
+
+      {/* Karty */}
       <div style={{maxWidth:980,margin:"20px auto",padding:"0 16px"}}>
-        {Object.keys(grouped).length===0&&
-          <p style={{textAlign:"center",color:"#94a3b8",marginTop:40}}>Brak wyników 😶</p>}
+        {Object.keys(grouped).length===0&&<p style={{textAlign:"center",color:"#94a3b8",marginTop:40}}>Brak wyników 😶</p>}
         {Object.entries(grouped).map(([cat,items])=>(
           <div key={cat} style={{marginBottom:32}}>
             <h2 style={{fontSize:18,fontWeight:800,margin:"0 0 12px",color:"#1e293b"}}>{cat}</h2>
@@ -833,15 +808,20 @@ function App() {
           </div>
         ))}
       </div>
-      <p style={{textAlign:"center",fontSize:11,color:"#94a3b8"}}>
-        🎬 Auto-miniatury YouTube · 🌐 Wikimedia · 📷 Unsplash · 🖼️ Pexels · 🔗 własny URL
+
+      {/* Similar Recipes */}
+      {ytKey
+        ? <SimilarRecipes recipe={expandedRecipe} ytKey={ytKey}/>
+        : <YTKeyBanner onSave={k=>{ss(KYT,k);setYtKey(k);}}/>
+      }
+
+      <p style={{textAlign:"center",fontSize:11,color:"#94a3b8",padding:"0 0 16px"}}>
+        Zdjęcia: 🎬 YT · 🌐 Wiki · 📷 Unsplash · 🖼️ Pexels · 🔗 URL · Dane w localStorage
       </p>
-      {picker&&<ImagePicker recipe={picker} keys={keys}
-        onPick={url=>handlePick(picker.id,url)} onClose={()=>setPicker(null)}/>}
-      {editModal&&<RecipeModal recipe={editModal==="new"?null:editModal}
-        onSave={addOrUpdate} onClose={()=>setEditModal(null)}/>}
-      {keysModal&&<KeysModal keys={keys}
-        onSave={k=>{setKeys(k);ss(KK,k);}} onClose={()=>setKeysModal(false)}/>}
+
+      {picker&&<ImagePicker recipe={picker} keys={keys} onPick={url=>handlePick(picker.id,url)} onClose={()=>setPicker(null)}/>}
+      {editModal&&<RecipeModal recipe={editModal==="new"?null:editModal} onSave={addOrUpdate} onClose={()=>setEditModal(null)}/>}
+      {keysModal&&<KeysModal keys={keys} onSave={k=>{setKeys(k);ss(KK,k);}} onClose={()=>setKeysModal(false)}/>}
     </div>
   );
 }
