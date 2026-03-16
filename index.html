@@ -686,16 +686,13 @@ function RecipeModal({recipe, onSave, onClose}) {
 /* ─── Card ────────────────────────────── */
 function Card({r, expanded, onToggle, onEdit, onDelete, adminMode, customUrl, onPickRequest}) {
   const b = catBorder[r.cat]||"#6366f1";
-  const cyclingRef = React.useRef({current: false});
-  const handleToggle = () => { if(cyclingRef.current?.current) return; onToggle(); };
   return (
-    <div onClick={handleToggle}
+    <div onClick={onToggle}
       style={{background:catColors[r.cat]||"#fff",borderRadius:14,cursor:"pointer",overflow:"hidden",
         display:"flex",flexDirection:"column",
         border:`2px solid ${expanded?b:"transparent"}`,
         boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}>
-      <CardImg r={r} customUrl={customUrl} adminMode={adminMode}
-        onPickRequest={onPickRequest} onScrubRef={cyclingRef}/>
+      <CardImg r={r} customUrl={customUrl} adminMode={adminMode} onPickRequest={onPickRequest}/>
       <div style={{padding:"12px 14px 10px",flex:1}}>
         <div style={{fontWeight:700,fontSize:14,color:"#1e293b",lineHeight:1.4}}>{r.name}</div>
         {r.note&&<span style={{fontSize:11,color:"#64748b",background:"rgba(0,0,0,0.06)",
