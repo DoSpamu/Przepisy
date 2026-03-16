@@ -42,7 +42,9 @@
 const {useState, useEffect} = React;
 
 /* ─── Storage keys ───────────────────── */
-const KR  = "przepisy_v8";
+const DEFAULT_YT_KEY  = "REMOVED_YT_KEY";
+const DEFAULT_UNSPLASH= "REMOVED_UNSPLASH_KEY";
+const DEFAULT_PEXELS  = "REMOVED_PEXELS_KEY";
 const KI  = "img_chosen_v5";
 const KK  = "api_keys_v2";
 const KYT = "yt_api_key_v1";
@@ -732,8 +734,8 @@ function SimilarRecipes({recipe, ytKey}) {
 function App() {
   const [recipes,   setRecipes]  = useState(()=>gs(KR)||DR);
   const [chosen,    setChosen]   = useState(()=>gs(KI)||{});
-  const [keys,      setKeys]     = useState(()=>gs(KK)||{unsplash:"",pexels:""});
-  const [ytKey,     setYtKey]    = useState(()=>gs(KYT)||"");
+  const [keys,      setKeys]     = useState(()=>gs(KK)||{unsplash:DEFAULT_UNSPLASH, pexels:DEFAULT_PEXELS});
+  const [ytKey,     setYtKey]    = useState(()=>gs(KYT)||DEFAULT_YT_KEY);
   const [activeCat, setActiveCat]= useState("Wszystkie");
   const [expanded,  setExpanded] = useState(null);
   const [search,    setSearch]   = useState("");
