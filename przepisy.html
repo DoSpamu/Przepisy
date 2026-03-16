@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Moja Baza Przepisów</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f8fafc; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    const recipes = [
+      { id:1, cat:"🐔 Kurczak", name:"Kurczak w sosie cebulowym", link:"https://youtube.com/shorts/NjPCl4zwbUk", note:"Listopad", skladniki:["filet z kurczaka","3 cebule","masło","śmietanka lub mascarpone","bulion drobiowy","mąka","sól, pieprz","słodka papryka","curry","oliwa"] },
+      { id:2, cat:"🐔 Kurczak", name:"Kurczak z kopytkami", link:"https://youtube.com/shorts/tpBLJRa8OyY", note:"Czerwiec", skladniki:["filet z kurczaka","ziemniaki (na kopytka)","mąka pszenna","jajko","cebula","masło","śmietana","sól, pieprz"] },
+      { id:3, cat:"🐔 Kurczak", name:"Kurczak teriyaki", link:"https://youtube.com/shorts/nt3_kaQjTL8", note:"Marzec 2025", skladniki:["filet z kurczaka","sos sojowy","miód","czosnek","imbir","olej sezamowy","skrobia ziemniaczana","ryż","sezam"] },
+      { id:4, cat:"🐔 Kurczak", name:"Kurczak z sosem serowym", link:"https://youtube.com/shorts/YBdjb_MKjl8", note:"Marzec 2025", skladniki:["filet z kurczaka","ser żółty / gouda","śmietanka kremówka","masło","czosnek","sól, pieprz"] },
+      { id:5, cat:"🐔 Kurczak", name:"Dragon Chicken (głęboki olej)", link:"https://www.facebook.com/share/v/1A6qMtKk8D/", note:"Marzec 2025", skladniki:["filet z kurczaka","olej do smażenia (dużo)","sos sojowy","chili","czosnek","imbir","mąka / skrobia","cebula dymka","papryczki","sezam"] },
+      { id:6, cat:"🐔 Kurczak", name:"Kurczak w sosie śmietanowo-maślanym z parmezanem", link:"https://www.facebook.com/share/r/1Gw1JVygMr/", note:"Facebook", skladniki:["filet z kurczaka","masło","śmietanka kremówka","parmezan","czosnek","sól, pieprz","natka pietruszki"] },
+      { id:7, cat:"🐔 Kurczak", name:"Kurczak po chińsku z air fryer", link:"https://youtube.com/shorts/eUwQQF-jIUE", note:"Air fryer", skladniki:["filet z kurczaka","sos sojowy","czosnek","imbir","miód","olej sezamowy","papryka chili","skrobia"] },
+      { id:8, cat:"🐔 Kurczak", name:"Kurczak z ziemniakami i papryką w papilotach", link:"https://youtube.com/shorts/9iXCtnFyHHI", note:"Styczeń 2026 – piekarnik", skladniki:["udka / filet z kurczaka","ziemniaki","papryka czerwona","oliwa z oliwek","czosnek","sól, pieprz","zioła prowansalskie"] },
+      { id:9, cat:"🥩 Schab", name:"Schab w sosie pomidorowym z warzywami", link:"https://youtube.com/shorts/-hKy3oENQSA", note:"Zasmażka z masła", skladniki:["schab wieprzowy","papryka czerwona","pieczarki","cebula","czosnek","koncentrat pomidorowy","masło","mąka","bulion","śmietanka","sól, pieprz","oregano"] },
+      { id:10, cat:"🥩 Schab", name:"Schab w miodowo-czosnkowym sosie / ryż", link:"https://youtube.com/shorts/MjrAx1UqFE8", note:"", skladniki:["schab wieprzowy","miód","czosnek","sos sojowy","masło","bulion","mąka","ryż"] },
+      { id:11, cat:"🥩 Schab", name:"Schab w cebulowym sosie", link:"https://youtu.be/uHYBPO_OpGE", note:"Już robiony ✅", skladniki:["schab wieprzowy","cebula (dużo)","masło","bulion","śmietanka","mąka","tymianek","sól, pieprz"] },
+      { id:12, cat:"🥩 Schab", name:"Rolada schabowa (w środku pietruszka)", link:"https://youtube.com/shorts/PrNv097lPds", note:"", skladniki:["schab (plastry)","natka pietruszki","czosnek","sól, pieprz","sznurek / wykałaczki","olej"] },
+      { id:13, cat:"🥩 Schab", name:"Roladki ze schabu w białym sosie", link:"https://youtube.com/shorts/_tuUDqUwkwM", note:"", skladniki:["schab wieprzowy","śmietanka","masło","mąka","bulion","czosnek","sól, pieprz"] },
+      { id:14, cat:"🥩 Karkówka", name:"Karkówka w cebulowym (jak schab)", link:"https://youtube.com/shorts/HzillIoCblM", note:"", skladniki:["karkówka wieprzowa","cebula","masło","bulion","śmietanka","mąka","sól, pieprz"] },
+      { id:15, cat:"🥩 Karkówka", name:"Jednogarnkowa karkówka z ziemniakami i kapustą kiszoną", link:"https://youtube.com/shorts/KyWnBaHG-Zw", note:"", skladniki:["karkówka wieprzowa","ziemniaki","kapusta kiszona","cebula","czosnek","liść laurowy","ziele angielskie","bulion","sól, pieprz"] },
+      { id:16, cat:"🥩 Karkówka", name:"Karkówka po wieśniacku (ziemniaki pod karkówką)", link:"https://youtube.com/shorts/RlOWE-L1RIo", note:"Styczeń 2026", skladniki:["karkówka wieprzowa","ziemniaki","cebula","czosnek","papryka","oliwa","sól, pieprz","zioła"] },
+      { id:17, cat:"🥩 Karkówka", name:"Karkówka w sosie pomidorowym z warzywami i pieczarkami", link:"https://youtube.com/shorts/daGscHd9Hcg", note:"Piekarnik – sos plywa xD", skladniki:["karkówka wieprzowa","pomidory / passata","pieczarki","papryka","cebula","czosnek","oliwa","sól, pieprz","oregano","bazylia"] },
+      { id:18, cat:"🐄 Wołowina", name:"Wołowina mielona z kluseczkami po azjatycku", link:"https://youtube.com/shorts/SjWEO6g-kb4", note:"Marzec 2025", skladniki:["wołowina mielona","sos sojowy","czosnek","imbir","cebula dymka","olej sezamowy","papryczka chili","kluseczki (mąka, jajko, woda)"] },
+      { id:19, cat:"🐄 Wołowina", name:"Zrazy wołowe (udziec)", link:"https://youtu.be/dHFqHP_1zz8", note:"", skladniki:["udziec wołowy (plastry)","ogórek kiszony","boczek wędzony","cebula","musztarda","liść laurowy","ziele angielskie","mąka","bulion wołowy"] },
+      { id:20, cat:"🐄 Wołowina", name:"Forszmak polski / stroganow", link:"https://youtube.com/shorts/5ry4j7KQwJI", note:"", skladniki:["wołowina","pieczarki","cebula","ogórki kiszone","śmietana","mąka","masło","bulion","sól, pieprz"] },
+      { id:21, cat:"🐄 Wołowina", name:"Żeberka w sosie teriyaki", link:"https://youtube.com/shorts/08EBGmUXf6s", note:"", skladniki:["żeberka wołowe","sos sojowy","miód","czosnek","imbir","olej sezamowy","skrobia","sezam","cebula dymka"] },
+      { id:22, cat:"🌭 Kiełbasa", name:"Kiełbasa chorizo z makaronem", link:"https://youtube.com/shorts/ZZ6TUWmKQRk", note:"Git! ✅", skladniki:["kiełbasa chorizo","makaron","pomidory / passata","czosnek","cebula","oliwa","papryka wędzona","parmezan","bazylia"] },
+      { id:23, cat:"🌭 Kiełbasa", name:"Kiełbasa z sosem paprykowym i ziemniaki", link:"https://youtube.com/shorts/bBoX74VH87c", note:"", skladniki:["kiełbasa","papryka czerwona i żółta","ziemniaki","cebula","śmietana","czosnek","papryka słodka w proszku","olej"] },
+      { id:24, cat:"🐟 Ryba", name:"Fish and Chips", link:"https://youtube.com/shorts/-xovB3qzMos", note:"", skladniki:["filet rybny (dorsz / mintaj)","mąka pszenna","piwo jasne","proszek do pieczenia","sól, pieprz","ziemniaki (frytki)","olej do smażenia"] },
+      { id:25, cat:"🥘 Wariacje", name:"Ryż z wczoraj z sosem sojowym", link:"https://youtube.com/shorts/eTgI_MDPyYs", note:"Resztki 😄", skladniki:["ryż (gotowany dzień wcześniej)","sos sojowy","jajko","cebula dymka","olej","czosnek"] },
+      { id:26, cat:"🥘 Wariacje", name:"Makaron z zupki chińskiej z warzywami", link:"https://youtube.com/shorts/DIWgWDzek8A", note:"Cokolwiek z lodówki 😅", skladniki:["zupka chińska (makaron)","warzywa (cokolwiek masz)","jajko","sos sojowy","czosnek","olej"] },
+      { id:27, cat:"🥘 Wariacje", name:"Kapusta z mielonym ala gołąbek", link:"https://youtube.com/shorts/A6K3e3lsFA0", note:"", skladniki:["kapusta biała","mięso mielone","ryż","cebula","koncentrat pomidorowy","czosnek","sól, pieprz","majeranek"] },
+      { id:28, cat:"🥘 Wariacje", name:"Kartoflanka", link:"https://www.facebook.com/share/p/1CPSVSZaJS/", note:"Facebook", skladniki:["ziemniaki","boczek wędzony lub kiełbasa","cebula","marchew","pietruszka","liść laurowy","ziele angielskie","majeranek","bulion"] },
+      { id:29, cat:"🥘 Wariacje", name:"Wieprzowina w pięciu smakach / makaron ryżowy", link:"https://youtu.be/QEaXO7heFHc", note:"", skladniki:["wieprzowina","makaron ryżowy","przyprawa 5-spice","sos sojowy","sos ostrygowy","czosnek","imbir","warzywa (pak choi / kapusta)"] },
+      { id:30, cat:"🥘 Wariacje", name:"Makaron domowy z sosem z papryki + kluski kręcone", link:"https://youtube.com/shorts/vzeLT2VzrKQ", note:"", skladniki:["mąka pszenna","jajka","woda","papryka czerwona","śmietanka","cebula","czosnek","masło"] },
+      { id:31, cat:"🥘 Wariacje", name:"Szparagi", link:"https://youtube.com/shorts/zGmqTDT184U", note:"", skladniki:["szparagi zielone","masło","czosnek","parmezan","cytryna","sól, pieprz"] },
+      { id:32, cat:"🥘 Wariacje", name:"Makaron + mielone z jednej patelni", link:"https://youtube.com/shorts/TurjJtwl2es", note:"Styczeń 2026", skladniki:["mięso mielone","makaron","pomidory / passata","cebula","czosnek","papryka","bulion","ser żółty"] },
+      { id:33, cat:"🥘 Wariacje", name:"Rolada gołąbkowa", link:"https://youtube.com/shorts/J1gRJ3ZP-_Y", note:"", skladniki:["kapusta (liście)","mięso mielone","ryż ugotowany","cebula","jajko","koncentrat pomidorowy","śmietana","sół, pieprz","majeranek"] },
+      { id:34, cat:"🥘 Wariacje", name:"Pieczarki do wódki na imprezę 🍺", link:"https://youtube.com/shorts/a3ubNmoELV4", note:"Impreza!", skladniki:["pieczarki","masło","czosnek","śmietana","natka pietruszki","sól, pieprz"] },
+      { id:35, cat:"🥗 Sałatki", name:"Sałatka z kiszonej kapusty", link:"https://youtube.com/shorts/xNhMwoV3LWA", note:"", skladniki:["kapusta kiszona","jabłko","marchew","cebula","cukier","olej","sól"] },
+      { id:36, cat:"🥗 Sałatki", name:"Sałatka z buraczków", link:"https://youtube.com/shorts/QFKgQBv9YPg", note:"", skladniki:["buraki ugotowane","cebula","ocet","cukier","sól","olej"] },
+      { id:37, cat:"🥗 Sałatki", name:"Zajebista sałatka (polecam!)", link:"https://youtube.com/shorts/iyFpl2mmhm4", note:"Styczeń 2026", skladniki:["🎬 Sprawdź film po dokładne składniki!"] },
+      { id:38, cat:"🥖 Pieczywo", name:"Chleb", link:"https://youtube.com/shorts/Hassw-uaCRM", note:"", skladniki:["mąka pszenna","drożdże","woda letnia","sól","olej"] },
+      { id:39, cat:"🥖 Pieczywo", name:"Lawasze do kebaba", link:"https://youtube.com/shorts/CIjooqxnWi0", note:"", skladniki:["mąka pszenna","woda letnia","drożdże","sól","olej"] },
+      { id:40, cat:"🥖 Pieczywo", name:"Bułka do burgerów", link:"https://youtube.com/shorts/IifL_NqJwx8", note:"", skladniki:["mąka pszenna","drożdże","mleko","masło","jajko","cukier","sól","sezam"] },
+    ];
+
+    const cats = ["Wszystkie", ...Array.from(new Set(recipes.map(r => r.cat)))];
+
+    const catColors = {
+      "🐔 Kurczak":"#fef3c7","🥩 Schab":"#fce7f3","🥩 Karkówka":"#ffe4e6",
+      "🐄 Wołowina":"#fee2e2","🌭 Kiełbasa":"#fef9c3","🐟 Ryba":"#dbeafe",
+      "🥘 Wariacje":"#d1fae5","🥗 Sałatki":"#ecfdf5","🥖 Pieczywo":"#fffbeb",
+    };
+    const catBorder = {
+      "🐔 Kurczak":"#f59e0b","🥩 Schab":"#ec4899","🥩 Karkówka":"#f43f5e",
+      "🐄 Wołowina":"#ef4444","🌭 Kiełbasa":"#eab308","🐟 Ryba":"#3b82f6",
+      "🥘 Wariacje":"#10b981","🥗 Sałatki":"#059669","🥖 Pieczywo":"#d97706",
+    };
+
+    function App() {
+      const [activeCat, setActiveCat] = useState("Wszystkie");
+      const [expanded, setExpanded] = useState(null);
+      const [search, setSearch] = useState("");
+
+      const filtered = recipes.filter(r => {
+        const matchCat = activeCat === "Wszystkie" || r.cat === activeCat;
+        const matchSearch = r.name.toLowerCase().includes(search.toLowerCase()) ||
+          r.skladniki.some(s => s.toLowerCase().includes(search.toLowerCase()));
+        return matchCat && matchSearch;
+      });
+
+      const grouped = {};
+      filtered.forEach(r => { if (!grouped[r.cat]) grouped[r.cat] = []; grouped[r.cat].push(r); });
+
+      return (
+        <div style={{fontFamily:"'Segoe UI',sans-serif",background:"#f8fafc",minHeight:"100vh",paddingBottom:40}}>
+          <div style={{background:"linear-gradient(135deg,#1e293b,#334155)",color:"white",padding:"24px 20px 20px"}}>
+            <div style={{maxWidth:900,margin:"0 auto"}}>
+              <h1 style={{fontSize:26,fontWeight:800,letterSpacing:"-0.5px"}}>🍳 Moja Baza Przepisów</h1>
+              <p style={{margin:"6px 0 16px",opacity:0.7,fontSize:13}}>{recipes.length} przepisów · kliknij kartę aby zobaczyć składniki · 🔗 otwiera film</p>
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="🔍 Szukaj przepisu lub składnika..."
+                style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"none",fontSize:14,outline:"none"}} />
+            </div>
+          </div>
+
+          <div style={{background:"#1e293b",padding:"0 20px 14px",overflowX:"auto"}}>
+            <div style={{maxWidth:900,margin:"0 auto",display:"flex",gap:8,flexWrap:"wrap",paddingTop:12}}>
+              {cats.map(c => (
+                <button key={c} onClick={() => setActiveCat(c)}
+                  style={{padding:"6px 14px",borderRadius:20,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,
+                    background:activeCat===c?"#f59e0b":"rgba(255,255,255,0.1)",
+                    color:activeCat===c?"#1e293b":"white"}}>
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{maxWidth:900,margin:"20px auto",padding:"0 16px"}}>
+            {Object.keys(grouped).length === 0 && (
+              <p style={{textAlign:"center",color:"#94a3b8",marginTop:40}}>Brak wyników 😶</p>
+            )}
+            {Object.entries(grouped).map(([cat, items]) => (
+              <div key={cat} style={{marginBottom:28}}>
+                <h2 style={{fontSize:18,fontWeight:800,margin:"0 0 12px",color:"#1e293b"}}>{cat}</h2>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
+                  {items.map(r => (
+                    <div key={r.id} onClick={() => setExpanded(expanded===r.id ? null : r.id)}
+                      style={{background:catColors[r.cat]||"#fff",borderRadius:14,
+                        border:`2px solid ${expanded===r.id ? catBorder[r.cat] : "transparent"}`,
+                        boxShadow:"0 2px 8px rgba(0,0,0,0.07)",cursor:"pointer",overflow:"hidden"}}>
+                      <div style={{padding:"14px 14px 10px"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                          <span style={{fontWeight:700,fontSize:14,color:"#1e293b",lineHeight:1.4}}>{r.name}</span>
+                          <a href={r.link} target="_blank" rel="noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            style={{flexShrink:0,fontSize:18,textDecoration:"none"}} title="Otwórz film">🔗</a>
+                        </div>
+                        {r.note && <span style={{fontSize:11,color:"#64748b",background:"rgba(0,0,0,0.06)",padding:"2px 7px",borderRadius:10,display:"inline-block",marginTop:6}}>{r.note}</span>}
+                        <div style={{marginTop:8,fontSize:12,color:"#64748b"}}>{expanded===r.id ? "▲ Zwiń" : "▼ Składniki"}</div>
+                      </div>
+                      {expanded===r.id && (
+                        <div style={{padding:"0 14px 14px"}}>
+                          <div style={{background:"rgba(255,255,255,0.6)",borderRadius:10,padding:"10px 12px"}}>
+                            <div style={{fontSize:12,fontWeight:700,color:"#475569",marginBottom:6,textTransform:"uppercase"}}>Składniki:</div>
+                            {r.skladniki.map((s,i) => (
+                              <div key={i} style={{fontSize:13,color:"#1e293b",padding:"3px 0",display:"flex",gap:6}}>
+                                <span style={{color:catBorder[r.cat],fontWeight:700}}>•</span> {s}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p style={{textAlign:"center",fontSize:11,color:"#94a3b8"}}>⚠️ Składniki są przybliżone. Kliknij 🔗 aby zobaczyć film.</p>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
