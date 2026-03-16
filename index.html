@@ -454,16 +454,15 @@ function AddModal({onAdd, onClose}) {
     if(!url.trim()) return;
     setStep(1); setError("");
     try {
-      const title = await fetchYTTitle(url);
-      const result = await aiAnalyze(url, title);
+      const result = await analyzeRecipe(url);
       setData(result);
-      setName(result.name||"");
-      setCat(result.cat||"🥘 Wariacje");
-      setSk(result.skladniki||[]);
+      setName(result.name  || "");
+      setCat(result.cat    || "🥘 Wariacje");
+      setSk(result.skladniki || []);
       setNote("dodane przez społeczność 🤝");
       setStep(2);
     } catch(e) {
-      setError("Błąd: "+e.message);
+      setError("Błąd analizy: "+e.message);
       setStep(0);
     }
   };
