@@ -229,6 +229,8 @@ function CardImg({r, customUrl, adminMode, onPickRequest, onScrubRef}) {
   const intervalRef  = React.useRef(null);
   const progressRef  = React.useRef(null);
   const touchScrubbing = React.useRef(false);
+  // sync ref up to Card so it can suppress onClick
+  useEffect(()=>{ if(onScrubRef) onScrubRef.current = false; },[]);
   const touchStartX    = React.useRef(0);
 
   useEffect(()=>{setYtFailed(false);setCustomErr(false);setIdx(0);},[r.link,customUrl]);
@@ -305,9 +307,11 @@ function CardImg({r, customUrl, adminMode, onPickRequest, onScrubRef}) {
     <div
       style={{position:"relative",height:160,background:"#1e293b",
         overflow:"hidden",flexShrink:0,userSelect:"none"}}
-      ref={containerRef}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+      onMouseEnter={()=>setHovered(true)}
+      onMouseLeave={()=>{setHovered(false);setIdx(0);}}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       {/* ── custom image ── */}
       {showCustom && (
@@ -360,22 +364,25 @@ function CardImg({r, customUrl, adminMode, onPickRequest, onScrubRef}) {
         </div>
       )}
 
-      {showYT && (active||idx>0) && (
+      {/* ── label ── */}
+      {showYT && (hovered||idx>0) && (
         <div style={{position:"absolute",top:8,left:8,
           background:"rgba(0,0,0,0.72)",color:"#fff",borderRadius:6,
           padding:"2px 8px",fontSize:10,fontWeight:700,
-          backdropFilter:"blur(4px)"}}>
-          {frames[idx]?.label||""}
+          backdropFilter:"blur(4px)",transition:"opacity .2s",
+          opacity: hovered||idx>0 ? 1 : 0}}>
+          {labelText}
         </div>
       )}
 
-      {showYT && !active && idx===0 && (
+      {/* ── mobile hint (only when idle) ── */}
+      {showYT && !hovered && idx===0 && (
         <div style={{position:"absolute",bottom:20,left:"50%",
           transform:"translateX(-50%)",
           background:"rgba(0,0,0,0.5)",color:"#fff",borderRadius:6,
           padding:"2px 8px",fontSize:9,fontWeight:600,
           whiteSpace:"nowrap",backdropFilter:"blur(4px)"}}>
-          przewiń aby podejrzeć
+          👆 przesuń / najedź
         </div>
       )}
 
@@ -685,14 +692,17 @@ function RecipeModal({recipe, onSave, onClose}) {
 
 /* ─── Card ────────────────────────────── */
 function Card({r, expanded, onToggle, onEdit, onDelete, adminMode, customUrl, onPickRequest}) {
-  const b = catBorder[r.cat]||"#6366f1";
+  const b=catBorder[r.cat]||"#6366f1";
+  const scrubRef = React.useRef(false);
+  const handleToggle = () => { if(scrubRef.current) return; onToggle(); };
   return (
-    <div onClick={onToggle}
+    <div onClick={handleToggle}
       style={{background:catColors[r.cat]||"#fff",borderRadius:14,cursor:"pointer",overflow:"hidden",
         display:"flex",flexDirection:"column",
         border:`2px solid ${expanded?b:"transparent"}`,
         boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}>
-      <CardImg r={r} customUrl={customUrl} adminMode={adminMode} onPickRequest={onPickRequest}/>
+      <CardImg r={r} customUrl={customUrl} adminMode={adminMode}
+        onPickRequest={onPickRequest} onScrubRef={scrubRef}/>
       <div style={{padding:"12px 14px 10px",flex:1}}>
         <div style={{fontWeight:700,fontSize:14,color:"#1e293b",lineHeight:1.4}}>{r.name}</div>
         {r.note&&<span style={{fontSize:11,color:"#64748b",background:"rgba(0,0,0,0.06)",
