@@ -229,8 +229,6 @@ function CardImg({r, customUrl, adminMode, onPickRequest, onScrubRef}) {
   const intervalRef  = React.useRef(null);
   const progressRef  = React.useRef(null);
   const touchScrubbing = React.useRef(false);
-  // sync ref up to Card so it can suppress onClick
-  useEffect(()=>{ if(onScrubRef) onScrubRef.current = false; },[]);
   const touchStartX    = React.useRef(0);
 
   useEffect(()=>{setYtFailed(false);setCustomErr(false);setIdx(0);},[r.link,customUrl]);
@@ -364,14 +362,13 @@ function CardImg({r, customUrl, adminMode, onPickRequest, onScrubRef}) {
         </div>
       )}
 
-      {/* ── label ── */}
       {showYT && (hovered||idx>0) && (
         <div style={{position:"absolute",top:8,left:8,
           background:"rgba(0,0,0,0.72)",color:"#fff",borderRadius:6,
           padding:"2px 8px",fontSize:10,fontWeight:700,
           backdropFilter:"blur(4px)",transition:"opacity .2s",
           opacity: hovered||idx>0 ? 1 : 0}}>
-          {labelText}
+          {frames[idx]?.label||""}
         </div>
       )}
 
@@ -382,7 +379,7 @@ function CardImg({r, customUrl, adminMode, onPickRequest, onScrubRef}) {
           background:"rgba(0,0,0,0.5)",color:"#fff",borderRadius:6,
           padding:"2px 8px",fontSize:9,fontWeight:600,
           whiteSpace:"nowrap",backdropFilter:"blur(4px)"}}>
-          👆 przesuń / najedź
+          👆 dotknij aby podejrzeć
         </div>
       )}
 
