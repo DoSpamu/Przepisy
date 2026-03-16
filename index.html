@@ -64,13 +64,43 @@ function getYTId(url) {
 function getYTThumbs(url) {
   const id = getYTId(url);
   if (!id) return [];
-  // Try multiple quality levels
   return [
     { thumb: `https://img.youtube.com/vi/${id}/maxresdefault.jpg`, full: `https://img.youtube.com/vi/${id}/maxresdefault.jpg`, label: "Max (1280px)" },
     { thumb: `https://img.youtube.com/vi/${id}/sddefault.jpg`,     full: `https://img.youtube.com/vi/${id}/sddefault.jpg`,     label: "SD (640px)" },
     { thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,     full: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,     label: "HQ (480px)" },
     { thumb: `https://img.youtube.com/vi/${id}/mqdefault.jpg`,     full: `https://img.youtube.com/vi/${id}/mqdefault.jpg`,     label: "MQ (320px)" },
   ];
+}
+
+// HQ frame variants: try hq1/hq2/hq3 first (undocumented, 480px), fallback to 1/2/3 (120px)
+function getYTFrames(id) {
+  return [
+    // frame 0: main thumbnail — try maxres → hq
+    { hq: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
+      fb: `https://img.youtube.com/vi/${id}/mqdefault.jpg`,
+      label: "okładka" },
+    // frame 1: ~25%
+    { hq: `https://img.youtube.com/vi/${id}/hq1.jpg`,
+      fb: `https://img.youtube.com/vi/${id}/1.jpg`,
+      label: "~25% 🎬" },
+    // frame 2: ~50%
+    { hq: `https://img.youtube.com/vi/${id}/hq2.jpg`,
+      fb: `https://img.youtube.com/vi/${id}/2.jpg`,
+      label: "~50% 🎬" },
+    // frame 3: ~75%
+    { hq: `https://img.youtube.com/vi/${id}/hq3.jpg`,
+      fb: `https://img.youtube.com/vi/${id}/3.jpg`,
+      label: "~75% 🎬" },
+  ];
+}
+
+// Smart image with HQ → fallback chain
+function YTFrame({src, fallback, style, onError}) {
+  const [cur, setCur] = useState(src);
+  useEffect(()=>setCur(src),[src]);
+  return <img src={cur} style={style}
+    onError={()=>{ if(cur===src && fallback) setCur(fallback); else onError&&onError(); }}
+    alt=""/>;
 }
 
 // Auto-pick best available YT thumb (maxres → hq fallback)
@@ -186,59 +216,170 @@ const catColors = {"🐔 Kurczak":"#fef3c7","🥩 Schab":"#fce7f3","🥩 Karków
 const catBorder = {"🐔 Kurczak":"#f59e0b","🥩 Schab":"#ec4899","🥩 Karkówka":"#f43f5e","🐄 Wołowina":"#ef4444","🌭 Kiełbasa":"#eab308","🐟 Ryba":"#3b82f6","🥘 Wariacje":"#10b981","🥗 Sałatki":"#059669","🥖 Pieczywo":"#d97706"};
 const catEmoji  = {"🐔 Kurczak":"🐔","🥩 Schab":"🥩","🥩 Karkówka":"🥩","🐄 Wołowina":"🐄","🌭 Kiełbasa":"🌭","🐟 Ryba":"🐟","🥘 Wariacje":"🥘","🥗 Sałatki":"🥗","🥖 Pieczywo":"🥖"};
 
-/* ─── Card Image — auto YT then fallback ─ */
+/* ─── Card Image — filmstrip hover ───────── */
 function CardImg({r, customUrl, adminMode, onPickRequest}) {
-  const ytId = getYTId(r.link);
-  // What to show: customUrl override > YT auto > emoji placeholder
-  const [ytFailed, setYtFailed] = useState(false);
-  const [customErr, setCustomErr] = useState(false);
-  useEffect(()=>{setYtFailed(false);setCustomErr(false);},[r.link, customUrl]);
+  const ytId       = getYTId(r.link);
+  const frames     = ytId ? getYTFrames(ytId) : [];
+  const N          = frames.length; // 4
 
-  let content;
-  if (customUrl && !customErr) {
-    content = <img src={customUrl} alt={r.name} onError={()=>setCustomErr(true)}
-      style={{width:"100%",height:160,objectFit:"cover",display:"block"}}/>;
-  } else if (ytId && !ytFailed) {
-    content = <BestYTImg ytId={ytId}
-      style={{width:"100%",height:160,objectFit:"cover",display:"block"}}
-      onError={()=>setYtFailed(true)}/>;
-  } else {
-    content = (
-      <div style={{height:160,display:"flex",flexDirection:"column",alignItems:"center",
-        justifyContent:"center",gap:6,background:"#f1f5f9"}}>
-        <span style={{fontSize:44}}>{catEmoji[r.cat]||"🍽️"}</span>
-        {adminMode&&<span style={{fontSize:10,color:"#94a3b8"}}>kliknij 📷 aby zmienić</span>}
-      </div>
-    );
-  }
+  const [idx,       setIdx]      = useState(0);
+  const [hovered,   setHovered]  = useState(false);
+  const [ytFailed,  setYtFailed] = useState(false);
+  const [customErr, setCustomErr]= useState(false);
+  const [loaded,    setLoaded]   = useState({}); // track which frames loaded OK
+  const intervalRef = React.useRef(null);
+  const progressRef = React.useRef(null);
 
-  // Badge: show source
-  const badge = customUrl && !customErr
-    ? {label:"własne", bg:"#6366f1"}
-    : ytId && !ytFailed
-      ? {label:"YT", bg:"#ef4444"}
-      : null;
+  useEffect(()=>{setYtFailed(false);setCustomErr(false);setIdx(0);setLoaded({});},[r.link,customUrl]);
+
+  const showCustom = customUrl && !customErr;
+  const showYT     = !showCustom && ytId && !ytFailed;
+
+  // Auto-cycle on hover with smooth progress bar
+  useEffect(()=>{
+    if(!showYT||!hovered) {
+      clearInterval(intervalRef.current);
+      if(!hovered) setIdx(0);
+      return;
+    }
+    const DURATION = 800; // ms per frame
+    const TICK = 30;
+    let elapsed = 0;
+    let curFrame = 0;
+
+    intervalRef.current = setInterval(()=>{
+      elapsed += TICK;
+      const progress = elapsed / DURATION;
+      if(progressRef.current)
+        progressRef.current.style.width = `${((curFrame + progress) / N) * 100}%`;
+      if(elapsed >= DURATION) {
+        elapsed = 0;
+        curFrame = (curFrame + 1) % N;
+        setIdx(curFrame);
+      }
+    }, TICK);
+    return ()=>clearInterval(intervalRef.current);
+  },[hovered, showYT, N]);
+
+  // Touch scrub — drag finger to scrub through frames
+  const handleTouchMove = e => {
+    if(!showYT) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.touches[0]).clientX - rect.left;
+    const zone = Math.min(N-1, Math.max(0, Math.floor((x/rect.width)*N)));
+    setIdx(zone);
+  };
+
+  const badge = showCustom ? {label:"własne",bg:"#6366f1"}
+              : showYT     ? {label:"▶ YT",  bg:"#ef4444"}
+              : null;
+
+  const labelText = frames[idx]?.label || "";
 
   return (
-    <div style={{position:"relative",height:160,background:"#e2e8f0",overflow:"hidden",flexShrink:0}}>
-      {content}
-      {/* source badge */}
+    <div
+      style={{position:"relative",height:160,background:"#1e293b",
+        overflow:"hidden",flexShrink:0,userSelect:"none"}}
+      onMouseEnter={()=>setHovered(true)}
+      onMouseLeave={()=>{setHovered(false);setIdx(0);}}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={()=>setIdx(0)}
+    >
+      {/* ── custom image ── */}
+      {showCustom && (
+        <img src={customUrl} alt={r.name} onError={()=>setCustomErr(true)}
+          style={{width:"100%",height:160,objectFit:"cover",display:"block",
+            transition:"opacity .3s"}}/>
+      )}
+
+      {/* ── YT frames: all rendered, cross-fade ── */}
+      {showYT && frames.map((f,i)=>(
+        <YTFrame key={i} src={f.hq} fallback={f.fb}
+          style={{position:"absolute",inset:0,width:"100%",height:160,
+            objectFit:"cover",display:"block",
+            opacity: idx===i ? 1 : 0,
+            transition:"opacity 0.2s ease"}}
+          onError={()=>{ if(i===0) setYtFailed(true); }}/>
+      ))}
+
+      {/* ── empty ── */}
+      {!showCustom && !showYT && (
+        <div style={{height:160,display:"flex",flexDirection:"column",
+          alignItems:"center",justifyContent:"center",gap:6,background:"#f1f5f9"}}>
+          <span style={{fontSize:44}}>{catEmoji[r.cat]||"🍽️"}</span>
+          {adminMode&&<span style={{fontSize:10,color:"#94a3b8"}}>kliknij 📷 aby dodać</span>}
+        </div>
+      )}
+
+      {/* ── filmstrip progress bar ── */}
+      {showYT && (
+        <div style={{position:"absolute",bottom:0,left:0,right:0,height:3,
+          background:"rgba(255,255,255,0.2)"}}>
+          <div ref={progressRef}
+            style={{height:"100%",background:"#ef4444",
+              width: hovered ? undefined : `${((idx+1)/N)*100}%`,
+              transition: hovered ? "none" : "width 0.2s"}}/>
+        </div>
+      )}
+
+      {/* ── filmstrip dot indicators ── */}
+      {showYT && (
+        <div style={{position:"absolute",bottom:8,left:"50%",
+          transform:"translateX(-50%)",display:"flex",gap:5,pointerEvents:"none"}}>
+          {frames.map((_,i)=>(
+            <div key={i} style={{
+              width: idx===i ? 20 : 6,
+              height:6,borderRadius:3,
+              background: idx===i?"#ef4444":"rgba(255,255,255,0.5)",
+              transition:"all 0.25s ease",boxShadow:"0 1px 3px rgba(0,0,0,0.5)"}}/>
+          ))}
+        </div>
+      )}
+
+      {/* ── label ── */}
+      {showYT && (hovered||idx>0) && (
+        <div style={{position:"absolute",top:8,left:8,
+          background:"rgba(0,0,0,0.72)",color:"#fff",borderRadius:6,
+          padding:"2px 8px",fontSize:10,fontWeight:700,
+          backdropFilter:"blur(4px)",transition:"opacity .2s",
+          opacity: hovered||idx>0 ? 1 : 0}}>
+          {labelText}
+        </div>
+      )}
+
+      {/* ── mobile hint (only when idle) ── */}
+      {showYT && !hovered && idx===0 && (
+        <div style={{position:"absolute",bottom:20,left:"50%",
+          transform:"translateX(-50%)",
+          background:"rgba(0,0,0,0.5)",color:"#fff",borderRadius:6,
+          padding:"2px 8px",fontSize:9,fontWeight:600,
+          whiteSpace:"nowrap",backdropFilter:"blur(4px)"}}>
+          👆 przesuń / najedź
+        </div>
+      )}
+
+      {/* ── source badge ── */}
       {badge && (
-        <div style={{position:"absolute",top:8,left:8,background:badge.bg,color:"#fff",
-          borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:800,backdropFilter:"blur(4px)"}}>
+        <div style={{position:"absolute",top:8,right:44,background:badge.bg,
+          color:"#fff",borderRadius:6,padding:"2px 7px",
+          fontSize:10,fontWeight:800,backdropFilter:"blur(4px)"}}>
           {badge.label}
         </div>
       )}
-      <a href={r.link} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
-        style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,0.65)",color:"#fff",
-          borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,textDecoration:"none",
-          backdropFilter:"blur(4px)"}}>▶ Film</a>
+
+      <a href={r.link} target="_blank" rel="noreferrer"
+        onClick={e=>e.stopPropagation()}
+        style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,0.65)",
+          color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:12,
+          fontWeight:700,textDecoration:"none",backdropFilter:"blur(4px)"}}>▶</a>
+
       {adminMode&&(
         <button onClick={e=>{e.stopPropagation();onPickRequest();}}
-          style={{position:"absolute",bottom:8,left:8,background:"rgba(99,102,241,0.88)",
-            color:"#fff",border:"none",borderRadius:8,padding:"5px 10px",fontSize:11,
+          style={{position:"absolute",bottom:14,left:8,
+            background:"rgba(99,102,241,0.9)",color:"#fff",border:"none",
+            borderRadius:8,padding:"5px 10px",fontSize:11,
             fontWeight:700,cursor:"pointer",backdropFilter:"blur(4px)"}}>
-          📷 Zmień zdjęcie
+          📷 Zmień
         </button>
       )}
     </div>
