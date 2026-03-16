@@ -217,57 +217,84 @@ const catBorder = {"🐔 Kurczak":"#f59e0b","🥩 Schab":"#ec4899","🥩 Karków
 const catEmoji  = {"🐔 Kurczak":"🐔","🥩 Schab":"🥩","🥩 Karkówka":"🥩","🐄 Wołowina":"🐄","🌭 Kiełbasa":"🌭","🐟 Ryba":"🐟","🥘 Wariacje":"🥘","🥗 Sałatki":"🥗","🥖 Pieczywo":"🥖"};
 
 /* ─── Card Image — filmstrip hover ───────── */
-function CardImg({r, customUrl, adminMode, onPickRequest}) {
-  const ytId       = getYTId(r.link);
-  const frames     = ytId ? getYTFrames(ytId) : [];
-  const N          = frames.length; // 4
+function CardImg({r, customUrl, adminMode, onPickRequest, onScrubRef}) {
+  const ytId  = getYTId(r.link);
+  const frames = ytId ? getYTFrames(ytId) : [];
+  const N      = frames.length;
 
   const [idx,       setIdx]      = useState(0);
   const [hovered,   setHovered]  = useState(false);
   const [ytFailed,  setYtFailed] = useState(false);
   const [customErr, setCustomErr]= useState(false);
-  const [loaded,    setLoaded]   = useState({}); // track which frames loaded OK
-  const intervalRef = React.useRef(null);
-  const progressRef = React.useRef(null);
+  const intervalRef  = React.useRef(null);
+  const progressRef  = React.useRef(null);
+  const touchScrubbing = React.useRef(false);
+  // sync ref up to Card so it can suppress onClick
+  useEffect(()=>{ if(onScrubRef) onScrubRef.current = false; },[]);
+  const touchStartX    = React.useRef(0);
 
-  useEffect(()=>{setYtFailed(false);setCustomErr(false);setIdx(0);setLoaded({});},[r.link,customUrl]);
+  useEffect(()=>{setYtFailed(false);setCustomErr(false);setIdx(0);},[r.link,customUrl]);
 
   const showCustom = customUrl && !customErr;
   const showYT     = !showCustom && ytId && !ytFailed;
 
-  // Auto-cycle on hover with smooth progress bar
+  // Auto-cycle on hover (desktop)
   useEffect(()=>{
     if(!showYT||!hovered) {
       clearInterval(intervalRef.current);
       if(!hovered) setIdx(0);
       return;
     }
-    const DURATION = 800; // ms per frame
+    const DURATION = 800;
     const TICK = 30;
     let elapsed = 0;
     let curFrame = 0;
-
     intervalRef.current = setInterval(()=>{
       elapsed += TICK;
-      const progress = elapsed / DURATION;
       if(progressRef.current)
-        progressRef.current.style.width = `${((curFrame + progress) / N) * 100}%`;
-      if(elapsed >= DURATION) {
+        progressRef.current.style.width = `${((curFrame+(elapsed/DURATION))/N)*100}%`;
+      if(elapsed >= DURATION){
         elapsed = 0;
-        curFrame = (curFrame + 1) % N;
+        curFrame = (curFrame+1)%N;
         setIdx(curFrame);
       }
     }, TICK);
     return ()=>clearInterval(intervalRef.current);
   },[hovered, showYT, N]);
 
-  // Touch scrub — drag finger to scrub through frames
+  // ── Touch handlers ──────────────────────────
+  const handleTouchStart = e => {
+    if(!showYT) return;
+    touchScrubbing.current = false;
+    touchStartX.current = e.touches[0].clientX;
+    // preload: show frame 0, don't prevent default yet
+  };
+
   const handleTouchMove = e => {
     if(!showYT) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.touches[0]).clientX - rect.left;
-    const zone = Math.min(N-1, Math.max(0, Math.floor((x/rect.width)*N)));
-    setIdx(zone);
+    const dx = Math.abs(e.touches[0].clientX - touchStartX.current);
+    if(dx > 8) {
+      e.preventDefault();
+      e.stopPropagation();
+      touchScrubbing.current = true;
+      if(onScrubRef) onScrubRef.current = true;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.touches[0].clientX - rect.left;
+      const zone = Math.min(N-1, Math.max(0, Math.floor((x/rect.width)*N)));
+      setIdx(zone);
+    }
+  };
+
+  const handleTouchEnd = e => {
+    if(touchScrubbing.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      setTimeout(()=>{
+        touchScrubbing.current = false;
+        if(onScrubRef) onScrubRef.current = false;
+        setIdx(0);
+      }, 50);
+    }
   };
 
   const badge = showCustom ? {label:"własne",bg:"#6366f1"}
@@ -282,8 +309,9 @@ function CardImg({r, customUrl, adminMode, onPickRequest}) {
         overflow:"hidden",flexShrink:0,userSelect:"none"}}
       onMouseEnter={()=>setHovered(true)}
       onMouseLeave={()=>{setHovered(false);setIdx(0);}}
+      onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
-      onTouchEnd={()=>setIdx(0)}
+      onTouchEnd={handleTouchEnd}
     >
       {/* ── custom image ── */}
       {showCustom && (
@@ -665,13 +693,16 @@ function RecipeModal({recipe, onSave, onClose}) {
 /* ─── Card ────────────────────────────── */
 function Card({r, expanded, onToggle, onEdit, onDelete, adminMode, customUrl, onPickRequest}) {
   const b=catBorder[r.cat]||"#6366f1";
+  const scrubRef = React.useRef(false);
+  const handleToggle = () => { if(scrubRef.current) return; onToggle(); };
   return (
-    <div onClick={onToggle}
+    <div onClick={handleToggle}
       style={{background:catColors[r.cat]||"#fff",borderRadius:14,cursor:"pointer",overflow:"hidden",
         display:"flex",flexDirection:"column",
         border:`2px solid ${expanded?b:"transparent"}`,
         boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}>
-      <CardImg r={r} customUrl={customUrl} adminMode={adminMode} onPickRequest={onPickRequest}/>
+      <CardImg r={r} customUrl={customUrl} adminMode={adminMode}
+        onPickRequest={onPickRequest} onScrubRef={scrubRef}/>
       <div style={{padding:"12px 14px 10px",flex:1}}>
         <div style={{fontWeight:700,fontSize:14,color:"#1e293b",lineHeight:1.4}}>{r.name}</div>
         {r.note&&<span style={{fontSize:11,color:"#64748b",background:"rgba(0,0,0,0.06)",
