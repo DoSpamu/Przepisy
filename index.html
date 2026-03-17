@@ -50,6 +50,7 @@ const {useState, useEffect, useRef} = React;
 const API_YT       = "REMOVED_YT_KEY";
 const API_UNSPLASH = "REMOVED_UNSPLASH_KEY";
 const API_PEXELS   = "REMOVED_PEXELS_KEY";
+const GROQ_KEY     = "REMOVED_GROQ_KEY";
 const SUPABASE_URL = "https://fjhbnqbkdpgspucvanhq.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqaGJucWJrZHBnc3B1Y3ZhbmhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NDE2ODgsImV4cCI6MjA4OTMxNzY4OH0.VylvExUM5BH59FzcXLQlZ7DKRmCbJX1AQs_AqPa3hFQ";
 
@@ -97,7 +98,7 @@ async function sheetsSave(recipe) {
 }
 
 /* ══════════════════════════════
-   FREE AI — Pollinations.ai
+   AI — Groq (Llama 3.3 70B)
 ══════════════════════════════ */
 async function fetchYTTitle(url) {
   try {
@@ -113,26 +114,32 @@ Tytuł: "${title}"
 
 Zdecyduj:
 1. Kategorię (DOKŁADNIE jedna z listy): 🐔 Kurczak, 🥩 Schab, 🥩 Karkówka, 🐄 Wołowina, 🌭 Kiełbasa, 🐟 Ryba, 🥘 Wariacje, 🥗 Sałatki, 🥖 Pieczywo
-2. Krótką polską nazwę przepisu
+2. Krótką polską nazwę przepisu (max 60 znaków)
 3. 5-8 składników po polsku
-4. 3-5 angielskich słów do zdjęcia
+4. 3-5 angielskich słów kluczowych do wyszukiwania zdjęcia
 
-Odpowiedz TYLKO JSON:
+Odpowiedz TYLKO poprawnym JSON (bez żadnego dodatkowego tekstu):
 {"name":"...","cat":"...","skladniki":["..."],"q":"..."}`;
 
-  const r = await fetch("https://text.pollinations.ai/openai", {
+  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method:"POST",
-    headers:{"Content-Type":"application/json"},
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization":"Bearer "+GROQ_KEY
+    },
     body: JSON.stringify({
+      model:"llama-3.3-70b-versatile",
       messages:[{role:"user",content:prompt}],
-      model:"openai",
-      seed:42,
-      jsonMode:true
+      response_format:{type:"json_object"},
+      temperature:0.3,
     })
   });
-  if(!r.ok) throw new Error("Błąd AI ("+r.status+")");
-  const text = await r.text();
-  return JSON.parse(text.replace(/```json|```/g,"").trim());
+  if(!r.ok) {
+    const err = await r.json().catch(()=>({}));
+    throw new Error("Błąd Groq: "+(err?.error?.message||r.status));
+  }
+  const d = await r.json();
+  return JSON.parse(d.choices[0].message.content);
 }
 
 /* ══════════════════════════════
@@ -483,7 +490,7 @@ function AddModal({onAdd, onClose}) {
             <button className="btn" onClick={onClose} style={{background:"#f1f5f9",color:"#475569"}}>Anuluj</button>
           </div>
           <p style={{fontSize:11,color:"#94a3b8",marginTop:10,textAlign:"center"}}>
-            Używa darmowego Pollinations AI — bez klucza, bez limitu
+            Używa Groq AI (Llama 3.3 70B) — szybko i dokładnie
           </p>
         </>)}
 
@@ -491,7 +498,7 @@ function AddModal({onAdd, onClose}) {
           <div style={{textAlign:"center",padding:"36px 0"}}>
             <div style={{fontSize:52,marginBottom:12}} className="pulse">🤖</div>
             <div style={{fontWeight:700,color:"#1e293b",fontSize:15,marginBottom:6}}>Analizuję przepis...</div>
-            <div style={{fontSize:12,color:"#94a3b8"}}>Pollinations AI rozpoznaje kategorię i składniki</div>
+            <div style={{fontSize:12,color:"#94a3b8"}}>Groq AI (Llama 3.3) rozpoznaje kategorię i składniki</div>
           </div>
         )}
 
@@ -988,7 +995,7 @@ function App() {
       <SimilarRecipes recipe={expandedRecipe}/>
 
       <p style={{textAlign:"center",fontSize:11,color:"#94a3b8",padding:"0 0 20px"}}>
-        🤖 Pollinations AI · 🎬 YT miniatury · 🌐 Wiki · 📷 Unsplash · 🖼️ Pexels · 💾 Supabase
+        🤖 Groq AI (Llama 3.3) · 🎬 YT miniatury · 🌐 Wiki · 📷 Unsplash · 🖼️ Pexels · 💾 Supabase
       </p>
 
       {/* Modals */}
