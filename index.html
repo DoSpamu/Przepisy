@@ -269,6 +269,17 @@ const DEFAULT_RECIPES=[]; // przepisy trzymane w Supabase
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    CARD IMAGE (YT slideshow)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function FrameImg({f, active, setYtErr}) {
+  const [src, setSrc] = useState(f.h);
+  useEffect(()=>{ setSrc(f.h); }, [f.h]);
+  return (
+    <img src={src} alt=""
+      onError={()=>setSrc(s=>{ if(s===f.h) return f.f; setYtErr(true); return f.f; })}
+      style={{position:"absolute",top:0,left:0,width:"100%",height:160,
+        objectFit:"cover",display:"block",opacity:active?1:0,transition:"opacity .25s"}}/>
+  );
+}
+
 function CardImg({r, custom, admin, onPick}) {
   const vid    = ytId(r.link);
   const frames = vid ? ytFrames(vid) : [];
@@ -305,12 +316,9 @@ function CardImg({r, custom, admin, onPick}) {
       {showC && <img src={custom} alt="" onError={()=>setCErr(true)}
         style={{width:"100%",height:160,objectFit:"cover",display:"block"}}/>}
 
-      {showYT && frames.map((f,i)=>{
-        const [src,setSrc]=useState(f.h);
-        return <img key={i} src={src} alt="" onError={()=>setSrc(s=>s===f.h?f.f:setYtErr(true)||f.f)}
-          style={{position:"absolute",top:0,left:0,width:"100%",height:160,
-            objectFit:"cover",display:"block",opacity:idx===i?1:0,transition:"opacity .25s"}}/>;
-      })}
+      {showYT && frames.map((f,i)=>(
+        <FrameImg key={i} f={f} active={idx===i} setYtErr={setYtErr}/>
+      ))}
 
       {!showC&&!showYT&&(
         <div style={{height:160,display:"flex",alignItems:"center",justifyContent:"center",
