@@ -103,6 +103,13 @@ async function sheetsSave(recipe) {
   }
 }
 
+async function sheetsUpdateKroki(recipeId, kroki) {
+  try {
+    const {error} = await sb.from("recipes").update({kroki}).eq("id", recipeId);
+    if(error) console.warn("Update kroki error:", error);
+  } catch(e) { console.warn("sheetsUpdateKroki error:", e); }
+}
+
 /* ══════════════════════════════
    AI — Groq (Llama 3.3 70B)
 ══════════════════════════════ */
@@ -953,6 +960,109 @@ function SimilarRecipes({recipe}) {
   );
 }
 
+/* ── Batch Kroki Update Modal ── */
+function BatchKrokiModal({recipes, onUpdate, onClose}) {
+  const cancelRef = useRef(false);
+  const [status,  setStatus]  = useState("idle"); // idle | running | done
+  const [current, setCurrent] = useState(0);
+  const [log,     setLog]     = useState([]);
+
+  const toProcess = recipes.filter(r=>(!r.kroki||r.kroki.length===0)&&r.link);
+
+  const run = async () => {
+    cancelRef.current = false;
+    setStatus("running"); setLog([]); setCurrent(0);
+    let done = 0;
+    for (const r of toProcess) {
+      if(cancelRef.current) break;
+      setLog(l=>[...l,{id:r.id,name:r.name,status:"loading"}]);
+      try {
+        const ytId = getYTId(r.link);
+        const transcript = ytId ? await fetchYTTranscript(ytId) : null;
+        const result = await aiAnalyze(r.link, r.name, transcript);
+        const kroki = result.kroki||[];
+        await sheetsUpdateKroki(r.id, kroki);
+        onUpdate(r.id, kroki);
+        setLog(l=>l.map(e=>e.id===r.id?{...e,status:"done",count:kroki.length,trans:!!transcript}:e));
+      } catch(e) {
+        setLog(l=>l.map(e=>e.id===r.id?{...e,status:"error",msg:e.message}:e));
+      }
+      done++;
+      setCurrent(done);
+    }
+    setStatus("done");
+  };
+
+  const pct = toProcess.length ? Math.round((current/toProcess.length)*100) : 100;
+
+  return (
+    <div className="modal-bg" onClick={status==="running"?undefined:onClose}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <h2 style={{fontSize:18,fontWeight:800}}>🔄 Uzupełnij kroki przepisów</h2>
+          {status!=="running" && (
+            <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#94a3b8"}}>✕</button>
+          )}
+        </div>
+
+        {status==="idle" && (
+          toProcess.length===0
+            ? <div style={{padding:"20px 0",textAlign:"center",color:"#22c55e",fontWeight:700,fontSize:15}}>
+                ✅ Wszystkie przepisy mają już kroki przyrządzania!
+              </div>
+            : <>
+                <div style={{fontSize:13,color:"#64748b",marginBottom:16,lineHeight:1.7}}>
+                  Znaleziono <b style={{color:"#1e293b"}}>{toProcess.length} przepisów</b> bez kroków przyrządzania.<br/>
+                  Groq AI pobierze transkrypcję z YouTube i wygeneruje kroki dla każdego z nich.
+                </div>
+                <div style={{background:"#f8fafc",borderRadius:10,padding:"10px 12px",marginBottom:16,maxHeight:180,overflowY:"auto"}}>
+                  {toProcess.map(r=>(
+                    <div key={r.id} style={{fontSize:12,color:"#475569",padding:"3px 0"}}>• {r.name}</div>
+                  ))}
+                </div>
+                <button className="btn btn-primary" style={{width:"100%"}} onClick={run}>
+                  🚀 Rozpocznij aktualizację ({toProcess.length} przepisów)
+                </button>
+              </>
+        )}
+
+        {(status==="running"||status==="done") && (<>
+          <div style={{marginBottom:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#64748b",marginBottom:4}}>
+              <span>{current} / {toProcess.length} przepisów</span>
+              <span style={{fontWeight:700,color:"#6366f1"}}>{pct}%</span>
+            </div>
+            <div style={{background:"#e2e8f0",borderRadius:8,height:8}}>
+              <div style={{background:"#6366f1",height:8,borderRadius:8,transition:"width 0.4s",width:`${pct}%`}}/>
+            </div>
+          </div>
+          <div style={{maxHeight:320,overflowY:"auto",display:"flex",flexDirection:"column",gap:4,marginBottom:14}}>
+            {log.map(e=>(
+              <div key={e.id} style={{fontSize:12,padding:"6px 10px",borderRadius:8,display:"flex",gap:8,alignItems:"center",
+                background:e.status==="done"?"#f0fdf4":e.status==="error"?"#fee2e2":"#f8fafc",
+                color:e.status==="done"?"#166534":e.status==="error"?"#991b1b":"#64748b"}}>
+                <span style={{flexShrink:0}}>
+                  {e.status==="done"?"✅":e.status==="error"?"❌":<span className="pulse">⏳</span>}
+                </span>
+                <span style={{flex:1,fontWeight:600}}>{e.name}</span>
+                {e.status==="done" && <span style={{flexShrink:0,fontSize:11,color:"#16a34a"}}>
+                  {e.count} kroków {e.trans?"📝":""}
+                </span>}
+                {e.status==="error" && <span style={{flexShrink:0,fontSize:10}}>{e.msg}</span>}
+              </div>
+            ))}
+          </div>
+          {status==="done" && (
+            <button className="btn btn-primary" style={{width:"100%"}} onClick={onClose}>
+              ✅ Gotowe — zamknij
+            </button>
+          )}
+        </>)}
+      </div>
+    </div>
+  );
+}
+
 /* ══════════════════════════════
    APP
 ══════════════════════════════ */
@@ -967,6 +1077,7 @@ function App() {
   const [editModal,    setEditModal]   = useState(null);
   const [picker,       setPicker]      = useState(null);
   const [showAdd,      setShowAdd]     = useState(false);
+  const [showBatch,    setShowBatch]   = useState(false);
   const [loading,      setLoading]     = useState(true);
 
   useEffect(()=>ss(KI,chosen),[chosen]);
@@ -988,6 +1099,11 @@ function App() {
   };
 
   const handlePick = (id, url) => { setChosen(c=>({...c,[id]:url})); setPicker(null); };
+
+  const handleUpdateKroki = (id, kroki) => {
+    setCommunity(rs=>rs.map(r=>r.id===id?{...r,kroki}:r));
+    setAdminRecipes(rs=>rs.map(r=>r.id===id?{...r,kroki}:r));
+  };
 
   const addOrUpdate = form => {
     if(editModal==="new") {
@@ -1044,6 +1160,10 @@ function App() {
               {adminMode && (
                 <button className="btn" onClick={()=>setEditModal("new")}
                   style={{background:"#22c55e",color:"#fff"}}>✏️ Ręcznie</button>
+              )}
+              {adminMode && (
+                <button className="btn" onClick={()=>setShowBatch(true)}
+                  style={{background:"#f59e0b",color:"#1e293b"}}>🔄 Uzupełnij kroki</button>
               )}
               <button className="btn" onClick={()=>setAdminMode(a=>!a)}
                 style={{background:adminMode?"#f59e0b":"rgba(255,255,255,0.15)",
@@ -1112,6 +1232,7 @@ function App() {
       {showAdd   && <AddModal onAdd={handleAddCommunity} onClose={()=>setShowAdd(false)}/>}
       {picker    && <ImagePicker recipe={picker} onPick={url=>handlePick(picker.id,url)} onClose={()=>setPicker(null)}/>}
       {editModal && <RecipeModal recipe={editModal==="new"?null:editModal} onSave={addOrUpdate} onClose={()=>setEditModal(null)}/>}
+      {showBatch && <BatchKrokiModal recipes={allRecipes} onUpdate={handleUpdateKroki} onClose={()=>setShowBatch(false)}/>}
     </div>
   );
 }
