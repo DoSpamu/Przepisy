@@ -4,6 +4,8 @@
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
 
   const { videoId } = req.query;
   if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
@@ -25,9 +27,12 @@ export default async function handler(req, res) {
 
       if (r.ok) {
         const data = await r.json();
-        console.log("yt-transcript.io raw:", JSON.stringify(data).substring(0, 300));
+        const raw = JSON.stringify(data);
+        console.log("yt-transcript.io raw (600):", raw.substring(0, 600));
 
         const item   = Array.isArray(data) ? data[0] : data;
+
+        // Próbuj wszystkie znane struktury odpowiedzi
         const tracks = item?.transcripts ?? item?.tracks ?? (Array.isArray(item) ? item : null);
         const first  = Array.isArray(tracks) ? (tracks[0] ?? null) : tracks;
         const segs   =
@@ -40,7 +45,7 @@ export default async function handler(req, res) {
           [];
 
         let text = "";
-        if (Array.isArray(segs)) {
+        if (Array.isArray(segs) && segs.length > 0) {
           text = segs
             .map(s => s.text ?? s.utf8 ?? s.content ?? (typeof s === "string" ? s : ""))
             .join(" ")
@@ -49,6 +54,10 @@ export default async function handler(req, res) {
         } else if (typeof segs === "string") {
           text = segs.trim();
         }
+        // Fallback: jeśli item ma bezpośrednie pole text (string)
+        if (!text && typeof item?.text === "string") text = item.text.trim();
+
+        console.log("yt-transcript.io parsed length:", text.length);
 
         if (text.length > 150) {
           return res.json({ text: text.substring(0, 6000), source: "yt-transcript.io" });
