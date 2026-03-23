@@ -81,7 +81,7 @@ async function sheetsLoad() {
     return data.map(r=>({
       id:r.id, cat:r.cat||"", name:r.name||"",
       link:r.link||"", note:r.note||"", wiki:r.wiki||"",
-      q:r.q||"", skladniki:r.skladniki||[], kroki:r.kroki||[], addedAt:r.added_at,
+      q:r.q||"", skladniki:r.skladniki||[], kroki:r.kroki||[], transcript:r.transcript||"", addedAt:r.added_at,
     }));
   } catch { return []; }
 }
@@ -94,19 +94,20 @@ async function sheetsSave(recipe) {
     skladniki:recipe.skladniki||[], added_at:new Date().toISOString(),
   };
   try {
-    await sb.from("recipes").insert({...base, kroki:recipe.kroki||[]});
+    await sb.from("recipes").insert({...base, kroki:recipe.kroki||[], transcript:recipe.transcript||""});
   } catch(e) {
-    console.warn("Supabase insert z kroki nieudany, próba bez kroki:",e?.message||e);
+    console.warn("Supabase insert error, próba bez nowych pól:",e?.message||e);
     try { await sb.from("recipes").insert(base); }
     catch(e2) { console.warn("Supabase insert error:",e2); }
   }
 }
 
-async function sheetsUpdateKroki(recipeId, kroki) {
+// Zapisuje kroki, składniki i transkrypcję po AI-analizie
+async function sheetsUpdateAI(recipeId, {kroki, skladniki, transcript}) {
   try {
-    const {error} = await sb.from("recipes").update({kroki}).eq("id", recipeId);
-    if(error) console.warn("Update kroki error:", error);
-  } catch(e) { console.warn("sheetsUpdateKroki error:", e); }
+    const {error} = await sb.from("recipes").update({kroki, skladniki, transcript}).eq("id", recipeId);
+    if(error) console.warn("sheetsUpdateAI error:", error);
+  } catch(e) { console.warn("sheetsUpdateAI error:", e); }
 }
 
 /* ══════════════════════════════
@@ -490,6 +491,7 @@ function AddModal({onAdd, onClose}) {
   const [note,      setNote]    = useState("");
   const [loadMsg,      setLoadMsg]   = useState("Analizuję przepis...");
   const [hadTranscript,setHadTrans]  = useState(false);
+  const [transcript,   setTranscript]= useState("");
 
   const analyze = async () => {
     if(!url.trim()) return;
@@ -504,6 +506,7 @@ function AddModal({onAdd, onClose}) {
         transcript = await fetchYTTranscript(ytId);
       }
       setHadTrans(!!transcript);
+      setTranscript(transcript||"");
       setLoadMsg(transcript ? "Analizuję przepis z transkrypcją..." : "Analizuję przepis z Groq AI...");
       const result = await aiAnalyze(url, title, transcript);
       setData(result);
@@ -526,6 +529,7 @@ function AddModal({onAdd, onClose}) {
       wiki:"", q: data?.q||name,
       skladniki: sk.filter(s=>s.trim()),
       kroki: kroki.filter(k=>k.trim()),
+      transcript,
       addedAt: new Date().toISOString()
     };
     await onAdd(recipe);
@@ -946,7 +950,8 @@ function BatchKrokiModal({recipes, onUpdate, onClose}) {
   const [current, setCurrent] = useState(0);
   const [log,     setLog]     = useState([]);
 
-  const toProcess = recipes.filter(r=>(!r.kroki||r.kroki.length===0)&&r.link);
+  // Przepisy bez transkrypcji LUB bez kroków
+  const toProcess = recipes.filter(r=>r.link&&(!r.transcript||!r.kroki||r.kroki.length===0));
 
   const run = async () => {
     cancelRef.current = false;
@@ -957,12 +962,18 @@ function BatchKrokiModal({recipes, onUpdate, onClose}) {
       setLog(l=>[...l,{id:r.id,name:r.name,status:"loading"}]);
       try {
         const ytId = getYTId(r.link);
-        const transcript = ytId ? await fetchYTTranscript(ytId) : null;
+        // Użyj cached transkrypcji jeśli już pobrana — oszczędza tokeny i czas
+        let transcript = r.transcript || null;
+        const fromCache = !!transcript;
+        if(!transcript && ytId) transcript = await fetchYTTranscript(ytId);
+
         const result = await aiAnalyze(r.link, r.name, transcript);
         const kroki = result.kroki||[];
-        await sheetsUpdateKroki(r.id, kroki);
-        onUpdate(r.id, kroki);
-        setLog(l=>l.map(e=>e.id===r.id?{...e,status:"done",count:kroki.length,trans:!!transcript}:e));
+        const skladniki = result.skladniki||r.skladniki||[];
+        // Zapisz transkrypcję, składniki i kroki do Supabase
+        await sheetsUpdateAI(r.id, {kroki, skladniki, transcript: transcript||""});
+        onUpdate(r.id, {kroki, skladniki, transcript: transcript||""});
+        setLog(l=>l.map(e=>e.id===r.id?{...e,status:"done",count:kroki.length,trans:!!transcript,fromCache}:e));
       } catch(e) {
         setLog(l=>l.map(e=>e.id===r.id?{...e,status:"error",msg:e.message}:e));
       }
@@ -991,8 +1002,8 @@ function BatchKrokiModal({recipes, onUpdate, onClose}) {
               </div>
             : <>
                 <div style={{fontSize:13,color:"#64748b",marginBottom:16,lineHeight:1.7}}>
-                  Znaleziono <b style={{color:"#1e293b"}}>{toProcess.length} przepisów</b> bez kroków przyrządzania.<br/>
-                  Groq AI pobierze transkrypcję z YouTube i wygeneruje kroki dla każdego z nich.
+                  Znaleziono <b style={{color:"#1e293b"}}>{toProcess.length} przepisów</b> do zaktualizowania.<br/>
+                  Groq AI wygeneruje kroki i poprawi składniki na podstawie transkrypcji. Transkrypcje są zapisywane — kolejne uruchomienia korzystają z cache 💾
                 </div>
                 <div style={{background:"#f8fafc",borderRadius:10,padding:"10px 12px",marginBottom:16,maxHeight:180,overflowY:"auto"}}>
                   {toProcess.map(r=>(
@@ -1025,7 +1036,7 @@ function BatchKrokiModal({recipes, onUpdate, onClose}) {
                 </span>
                 <span style={{flex:1,fontWeight:600}}>{e.name}</span>
                 {e.status==="done" && <span style={{flexShrink:0,fontSize:11,color:"#16a34a"}}>
-                  {e.count} kroków {e.trans?"📝":""}
+                  {e.count} kroków {e.fromCache?"💾":e.trans?"📝":""}
                 </span>}
                 {e.status==="error" && <span style={{flexShrink:0,fontSize:10}}>{e.msg}</span>}
               </div>
@@ -1079,9 +1090,10 @@ function App() {
 
   const handlePick = (id, url) => { setChosen(c=>({...c,[id]:url})); setPicker(null); };
 
-  const handleUpdateKroki = (id, kroki) => {
-    setCommunity(rs=>rs.map(r=>r.id===id?{...r,kroki}:r));
-    setAdminRecipes(rs=>rs.map(r=>r.id===id?{...r,kroki}:r));
+  const handleUpdateAI = (id, {kroki, skladniki, transcript}) => {
+    const upd = r => r.id===id ? {...r,kroki,skladniki,transcript} : r;
+    setCommunity(rs=>rs.map(upd));
+    setAdminRecipes(rs=>rs.map(upd));
   };
 
   const addOrUpdate = form => {
@@ -1211,7 +1223,7 @@ function App() {
       {showAdd   && <AddModal onAdd={handleAddCommunity} onClose={()=>setShowAdd(false)}/>}
       {picker    && <ImagePicker recipe={picker} onPick={url=>handlePick(picker.id,url)} onClose={()=>setPicker(null)}/>}
       {editModal && <RecipeModal recipe={editModal==="new"?null:editModal} onSave={addOrUpdate} onClose={()=>setEditModal(null)}/>}
-      {showBatch && <BatchKrokiModal recipes={allRecipes} onUpdate={handleUpdateKroki} onClose={()=>setShowBatch(false)}/>}
+      {showBatch && <BatchKrokiModal recipes={allRecipes} onUpdate={handleUpdateAI} onClose={()=>setShowBatch(false)}/>}
     </div>
   );
 }
