@@ -143,12 +143,12 @@ Tytuł: "${title}"${transcriptSection}
 Zdecyduj:
 1. Kategorię (DOKŁADNIE jedna z listy): 🐔 Kurczak, 🥩 Schab, 🥩 Karkówka, 🐄 Wołowina, 🌭 Kiełbasa, 🐟 Ryba, 🥘 Wariacje, 🥗 Sałatki, 🥖 Pieczywo
 2. Krótką polską nazwę przepisu (max 60 znaków)
-3. 5-8 składników po polsku
+3. Wszystkie składniki po polsku z ilościami (np. "500g piersi z kurczaka", "2 ząbki czosnku")
 4. 3-5 angielskich słów kluczowych do wyszukiwania zdjęcia
-5. 5-8 kroków przyrządzania po polsku (każdy krok max 120 znaków, konkretny i praktyczny)
+5. Szczegółowy przepis krok po kroku po polsku — ${transcript ? "wyciągnij DOKŁADNIE z transkrypcji, nie pomijaj żadnych detali (temperatury, czasy, techniki)" : "opisz jak najdokładniej"}. Minimum 10 kroków, każdy krok to pełne zdanie opisujące konkretną czynność (max 200 znaków na krok).
 
 Odpowiedz TYLKO poprawnym JSON (bez żadnego dodatkowego tekstu):
-{"name":"...","cat":"...","skladniki":["..."],"q":"...","kroki":["Krok 1: ...","Krok 2: ..."]}`;
+{"name":"...","cat":"...","skladniki":["..."],"q":"...","kroki":["...","..."]}`;
 
 
   const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -162,6 +162,7 @@ Odpowiedz TYLKO poprawnym JSON (bez żadnego dodatkowego tekstu):
       messages:[{role:"user",content:prompt}],
       response_format:{type:"json_object"},
       temperature:0.3,
+      max_tokens:2048,
     })
   });
   if(!r.ok) {
