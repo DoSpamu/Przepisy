@@ -51,7 +51,6 @@ const API_YT       = "REMOVED_YT_KEY";
 const API_UNSPLASH = "REMOVED_UNSPLASH_KEY";
 const API_PEXELS   = "REMOVED_PEXELS_KEY";
 const GROQ_KEY         = "REMOVED_GROQ_KEY";
-const YT_TRANSCRIPT_KEY = ""; // opcjonalnie: klucz z youtube-transcript.io (Basic token)
 const SUPABASE_URL = "https://fjhbnqbkdpgspucvanhq.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqaGJucWJrZHBnc3B1Y3ZhbmhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NDE2ODgsImV4cCI6MjA4OTMxNzY4OH0.VylvExUM5BH59FzcXLQlZ7DKRmCbJX1AQs_AqPa3hFQ";
 
@@ -122,34 +121,14 @@ async function fetchYTTitle(url) {
 }
 
 async function fetchYTTranscript(videoId) {
-  // Próba 1: YouTube timedtext API (bezpłatny, bez klucza)
-  for (const lang of ["pl","en","auto"]) {
-    try {
-      const r = await fetch(`https://www.youtube.com/api/timedtext?v=${videoId}&lang=${lang}&fmt=json3`);
-      if (r.ok) {
-        const d = await r.json();
-        const text = (d.events||[]).filter(e=>e.segs).flatMap(e=>e.segs.map(s=>s.utf8||"")).join(" ").replace(/\s+/g," ").trim();
-        if (text.length > 150) return text.substring(0, 5000);
-      }
-    } catch {}
-  }
-  // Próba 2: youtube-transcript.io (wymaga klucza)
-  if (YT_TRANSCRIPT_KEY) {
-    try {
-      const r = await fetch("https://www.youtube-transcript.io/api/transcripts", {
-        method:"POST",
-        headers:{"Content-Type":"application/json","Authorization":"Basic "+YT_TRANSCRIPT_KEY},
-        body: JSON.stringify({ids:[videoId]})
-      });
-      if (r.ok) {
-        const d = await r.json();
-        const item = Array.isArray(d) ? d[0] : d;
-        const segs = item?.transcripts?.[0]?.segments || item?.transcript || [];
-        const text = Array.isArray(segs) ? segs.map(s=>s.text||s).join(" ").replace(/\s+/g," ").trim() : "";
-        if (text.length > 150) return text.substring(0, 5000);
-      }
-    } catch {}
-  }
+  // Serverless proxy — omija CORS, pobiera transkrypcję po stronie serwera
+  try {
+    const r = await fetch(`/api/transcript?videoId=${videoId}`);
+    if (r.ok) {
+      const d = await r.json();
+      if (d.text) return d.text;
+    }
+  } catch {}
   return null;
 }
 
