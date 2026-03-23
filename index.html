@@ -110,6 +110,26 @@ async function sheetsUpdateAI(recipeId, {kroki, skladniki, transcript}) {
   } catch(e) { console.warn("sheetsUpdateAI error:", e); }
 }
 
+// Aktualizuje metadane przepisu (nazwa, kat, link, notatka, składniki)
+async function sheetsUpdate(recipe) {
+  try {
+    const {error} = await sb.from("recipes").update({
+      cat: recipe.cat, name: recipe.name, link: recipe.link,
+      note: recipe.note, wiki: recipe.wiki||"", q: recipe.q||"",
+      skladniki: recipe.skladniki||[]
+    }).eq("id", recipe.id);
+    if(error) console.warn("sheetsUpdate error:", error);
+  } catch(e) { console.warn("sheetsUpdate error:", e); }
+}
+
+// Usuwa przepis z bazy
+async function sheetsDelete(recipeId) {
+  try {
+    const {error} = await sb.from("recipes").delete().eq("id", recipeId);
+    if(error) console.warn("sheetsDelete error:", error);
+  } catch(e) { console.warn("sheetsDelete error:", e); }
+}
+
 /* ══════════════════════════════
    AI — Groq (Llama 3.3 70B)
 ══════════════════════════════ */
@@ -417,8 +437,14 @@ function Card({r, expanded, onToggle, onEdit, onDelete, adminMode, customUrl, on
         </div>
         {r.note && <span style={{fontSize:11,color:"#64748b",background:"rgba(0,0,0,0.06)",
           padding:"2px 7px",borderRadius:10,display:"inline-block",marginTop:6}}>{r.note}</span>}
-        <div style={{marginTop:8,fontSize:12,color:"#64748b"}}>
-          {expanded ? (hasKroki?"▲ Zwiń":"▲ Zwiń") : (hasKroki?"▼ Składniki / Przepis":"▼ Składniki")}
+        <div style={{marginTop:8,fontSize:12,color:"#64748b",display:"flex",alignItems:"center",gap:6}}>
+          {expanded ? "▲ Zwiń" : (hasKroki?"▼ Składniki / Przepis":"▼ Składniki")}
+          {hasKroki && !expanded && (
+            <span style={{fontSize:10,background:"#6366f1",color:"#fff",
+              borderRadius:10,padding:"1px 6px",fontWeight:700,flexShrink:0}}>
+              {r.kroki.length} kroków
+            </span>
+          )}
         </div>
       </div>
       {expanded && (
@@ -951,8 +977,8 @@ function BatchKrokiModal({recipes, onUpdate, onClose}) {
   const [current, setCurrent] = useState(0);
   const [log,     setLog]     = useState([]);
 
-  // Przepisy bez transkrypcji LUB bez kroków
-  const toProcess = recipes.filter(r=>r.link&&(!r.transcript||!r.kroki||r.kroki.length===0));
+  // Tylko przepisy bez kroków (transkrypcja pobierana w locie jeśli brak cache)
+  const toProcess = recipes.filter(r=>r.link&&(!r.kroki||r.kroki.length===0));
 
   const run = async () => {
     cancelRef.current = false;
@@ -1043,6 +1069,12 @@ function BatchKrokiModal({recipes, onUpdate, onClose}) {
               </div>
             ))}
           </div>
+          {status==="running" && (
+            <button className="btn btn-danger" style={{width:"100%"}}
+              onClick={()=>{cancelRef.current=true;}}>
+              ⏹ Anuluj
+            </button>
+          )}
           {status==="done" && (
             <button className="btn btn-primary" style={{width:"100%"}} onClick={onClose}>
               ✅ Gotowe — zamknij
@@ -1097,25 +1129,30 @@ function App() {
     setAdminRecipes(rs=>rs.map(upd));
   };
 
-  const addOrUpdate = form => {
+  const addOrUpdate = async form => {
     if(editModal==="new") {
       setAdminRecipes(rs=>[...rs,{...form,id:Date.now()}]);
     } else if(commIds.has(editModal.id)) {
       setCommunity(rs=>rs.map(r=>r.id===editModal.id?{...form,id:r.id}:r));
+      await sheetsUpdate({...form, id: editModal.id});
     } else {
       setAdminRecipes(rs=>rs.map(r=>r.id===editModal.id?{...form,id:r.id}:r));
     }
     setEditModal(null);
   };
 
-  const deleteRecipe = id => {
-    if(commIds.has(id)) setCommunity(rs=>rs.filter(r=>r.id!==id));
-    else setAdminRecipes(rs=>rs.filter(r=>r.id!==id));
+  const deleteRecipe = async id => {
+    if(commIds.has(id)) {
+      setCommunity(rs=>rs.filter(r=>r.id!==id));
+      await sheetsDelete(id);
+    } else {
+      setAdminRecipes(rs=>rs.filter(r=>r.id!==id));
+    }
   };
 
   const allRecipes = [...DR, ...adminRecipes, ...community];
 
-  const cats = ["Wszystkie",...Array.from(new Set(allRecipes.map(r=>r.cat)))];
+  const cats = ["Wszystkie",...ALL_CATS.filter(c=>allRecipes.some(r=>r.cat===c))];
   const filtered = allRecipes.filter(r=>{
     const mc = activeCat==="Wszystkie"||r.cat===activeCat;
     const ms = r.name.toLowerCase().includes(search.toLowerCase())||
