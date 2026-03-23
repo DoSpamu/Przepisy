@@ -1,7 +1,7 @@
 // Vercel serverless function — pobiera transkrypcję YouTube bez CORS
-// Źródło 1: youtube-transcript.io (wymaga YT_TRANSCRIPT_KEY w env)
-// Źródło 2: YouTube page scraping (fallback, bez klucza)
-module.exports = async (req, res) => {
+// Źródło 1: youtube-transcript.io (YT_TRANSCRIPT_KEY env var)
+// Źródło 2: YouTube page scraping (fallback)
+export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET");
 
@@ -27,7 +27,6 @@ module.exports = async (req, res) => {
         const data = await r.json();
         console.log("yt-transcript.io raw:", JSON.stringify(data).substring(0, 300));
 
-        // Defensywne parsowanie — obsługuje kilka możliwych struktur odpowiedzi
         const item   = Array.isArray(data) ? data[0] : data;
         const tracks = item?.transcripts ?? item?.tracks ?? (Array.isArray(item) ? item : null);
         const first  = Array.isArray(tracks) ? (tracks[0] ?? null) : tracks;
@@ -118,4 +117,4 @@ module.exports = async (req, res) => {
     console.error("yt-scrape error:", e.message);
     return res.json({ text: null });
   }
-};
+}
