@@ -124,7 +124,7 @@ async function fetchYTTitle(url) {
 async function fetchYTTranscript(videoId) {
   // Serverless proxy — omija CORS, pobiera transkrypcję po stronie serwera
   try {
-    const r = await fetch(`/api/transcript?videoId=${videoId}`);
+    const r = await fetch(`/api/transcript?videoId=${videoId}&_=${Date.now()}`);
     if (r.ok) {
       const d = await r.json();
       if (d.text) return d.text;
