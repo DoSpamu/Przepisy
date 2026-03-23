@@ -50,7 +50,8 @@ const {useState, useEffect, useRef} = React;
 const API_YT       = "REMOVED_YT_KEY";
 const API_UNSPLASH = "REMOVED_UNSPLASH_KEY";
 const API_PEXELS   = "REMOVED_PEXELS_KEY";
-const GROQ_KEY     = "REMOVED_GROQ_KEY";
+const GROQ_KEY         = "REMOVED_GROQ_KEY";
+const YT_TRANSCRIPT_KEY = ""; // opcjonalnie: klucz z youtube-transcript.io (Basic token)
 const SUPABASE_URL = "https://fjhbnqbkdpgspucvanhq.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqaGJucWJrZHBnc3B1Y3ZhbmhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NDE2ODgsImV4cCI6MjA4OTMxNzY4OH0.VylvExUM5BH59FzcXLQlZ7DKRmCbJX1AQs_AqPa3hFQ";
 
@@ -81,20 +82,25 @@ async function sheetsLoad() {
     return data.map(r=>({
       id:r.id, cat:r.cat||"", name:r.name||"",
       link:r.link||"", note:r.note||"", wiki:r.wiki||"",
-      q:r.q||"", skladniki:r.skladniki||[], addedAt:r.added_at,
+      q:r.q||"", skladniki:r.skladniki||[], kroki:r.kroki||[], addedAt:r.added_at,
     }));
   } catch { return []; }
 }
 
 async function sheetsSave(recipe) {
+  const base = {
+    id:recipe.id, cat:recipe.cat||"", name:recipe.name||"",
+    link:recipe.link||"", note:recipe.note||"community 🤝",
+    wiki:recipe.wiki||"", q:recipe.q||"",
+    skladniki:recipe.skladniki||[], added_at:new Date().toISOString(),
+  };
   try {
-    await sb.from("recipes").insert({
-      id:recipe.id, cat:recipe.cat||"", name:recipe.name||"",
-      link:recipe.link||"", note:recipe.note||"community 🤝",
-      wiki:recipe.wiki||"", q:recipe.q||"",
-      skladniki:recipe.skladniki||[], added_at:new Date().toISOString(),
-    });
-  } catch(e) { console.warn("Supabase insert error:",e); }
+    await sb.from("recipes").insert({...base, kroki:recipe.kroki||[]});
+  } catch(e) {
+    console.warn("Supabase insert z kroki nieudany, próba bez kroki:",e?.message||e);
+    try { await sb.from("recipes").insert(base); }
+    catch(e2) { console.warn("Supabase insert error:",e2); }
+  }
 }
 
 /* ══════════════════════════════
@@ -108,18 +114,55 @@ async function fetchYTTitle(url) {
   return "";
 }
 
-async function aiAnalyze(url, title) {
+async function fetchYTTranscript(videoId) {
+  // Próba 1: YouTube timedtext API (bezpłatny, bez klucza)
+  for (const lang of ["pl","en","auto"]) {
+    try {
+      const r = await fetch(`https://www.youtube.com/api/timedtext?v=${videoId}&lang=${lang}&fmt=json3`);
+      if (r.ok) {
+        const d = await r.json();
+        const text = (d.events||[]).filter(e=>e.segs).flatMap(e=>e.segs.map(s=>s.utf8||"")).join(" ").replace(/\s+/g," ").trim();
+        if (text.length > 150) return text.substring(0, 5000);
+      }
+    } catch {}
+  }
+  // Próba 2: youtube-transcript.io (wymaga klucza)
+  if (YT_TRANSCRIPT_KEY) {
+    try {
+      const r = await fetch("https://www.youtube-transcript.io/api/transcripts", {
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":"Basic "+YT_TRANSCRIPT_KEY},
+        body: JSON.stringify({ids:[videoId]})
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const item = Array.isArray(d) ? d[0] : d;
+        const segs = item?.transcripts?.[0]?.segments || item?.transcript || [];
+        const text = Array.isArray(segs) ? segs.map(s=>s.text||s).join(" ").replace(/\s+/g," ").trim() : "";
+        if (text.length > 150) return text.substring(0, 5000);
+      }
+    } catch {}
+  }
+  return null;
+}
+
+async function aiAnalyze(url, title, transcript) {
+  const transcriptSection = transcript
+    ? `\nTranskrypcja wideo (fragment):\n"${transcript}"`
+    : "";
   const prompt = `Masz link do przepisu kulinarnego: ${url}
-Tytuł: "${title}"
+Tytuł: "${title}"${transcriptSection}
 
 Zdecyduj:
 1. Kategorię (DOKŁADNIE jedna z listy): 🐔 Kurczak, 🥩 Schab, 🥩 Karkówka, 🐄 Wołowina, 🌭 Kiełbasa, 🐟 Ryba, 🥘 Wariacje, 🥗 Sałatki, 🥖 Pieczywo
 2. Krótką polską nazwę przepisu (max 60 znaków)
 3. 5-8 składników po polsku
 4. 3-5 angielskich słów kluczowych do wyszukiwania zdjęcia
+5. 5-8 kroków przyrządzania po polsku (każdy krok max 120 znaków, konkretny i praktyczny)
 
 Odpowiedz TYLKO poprawnym JSON (bez żadnego dodatkowego tekstu):
-{"name":"...","cat":"...","skladniki":["..."],"q":"..."}`;
+{"name":"...","cat":"...","skladniki":["..."],"q":"...","kroki":["Krok 1: ...","Krok 2: ..."]}`;
+
 
   const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method:"POST",
@@ -367,6 +410,9 @@ function CardImg({r, customUrl, adminMode, onPickRequest}) {
 /* ── Card ─────────────────────── */
 function Card({r, expanded, onToggle, onEdit, onDelete, adminMode, customUrl, onPickRequest, isCommunity}) {
   const b = catBorder[r.cat]||"#6366f1";
+  const [activeTab, setActiveTab] = useState("skladniki");
+  useEffect(()=>{ if(!expanded) setActiveTab("skladniki"); },[expanded]);
+  const hasKroki = r.kroki && r.kroki.length > 0;
   return (
     <div onClick={onToggle}
       style={{background:catColors[r.cat]||"#fff",borderRadius:14,cursor:"pointer",overflow:"hidden",
@@ -383,19 +429,54 @@ function Card({r, expanded, onToggle, onEdit, onDelete, adminMode, customUrl, on
         </div>
         {r.note && <span style={{fontSize:11,color:"#64748b",background:"rgba(0,0,0,0.06)",
           padding:"2px 7px",borderRadius:10,display:"inline-block",marginTop:6}}>{r.note}</span>}
-        <div style={{marginTop:8,fontSize:12,color:"#64748b"}}>{expanded?"▲ Zwiń":"▼ Składniki"}</div>
+        <div style={{marginTop:8,fontSize:12,color:"#64748b"}}>
+          {expanded ? (hasKroki?"▲ Zwiń":"▲ Zwiń") : (hasKroki?"▼ Składniki / Przepis":"▼ Składniki")}
+        </div>
       </div>
       {expanded && (
         <div style={{padding:"0 14px 10px"}}>
-          <div style={{background:"rgba(255,255,255,0.7)",borderRadius:10,padding:"10px 12px"}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#475569",marginBottom:6,
-              textTransform:"uppercase",letterSpacing:".5px"}}>Składniki:</div>
-            {(r.skladniki||[]).map((s,i)=>(
-              <div key={i} style={{fontSize:13,color:"#1e293b",padding:"3px 0",display:"flex",gap:6}}>
-                <span style={{color:b,fontWeight:700,flexShrink:0}}>•</span>{s}
-              </div>
-            ))}
-          </div>
+          {hasKroki && (
+            <div style={{display:"flex",gap:3,marginBottom:8,background:"rgba(0,0,0,0.06)",borderRadius:10,padding:3}}>
+              <button className="tab-btn" onClick={e=>{e.stopPropagation();setActiveTab("skladniki")}}
+                style={{background:activeTab==="skladniki"?"#fff":"transparent",
+                  color:activeTab==="skladniki"?"#1e293b":"#64748b",
+                  boxShadow:activeTab==="skladniki"?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>
+                🛒 Składniki
+              </button>
+              <button className="tab-btn" onClick={e=>{e.stopPropagation();setActiveTab("przepis")}}
+                style={{background:activeTab==="przepis"?"#6366f1":"transparent",
+                  color:activeTab==="przepis"?"#fff":"#64748b",
+                  boxShadow:activeTab==="przepis"?"0 1px 4px rgba(0,0,0,0.2)":"none"}}>
+                📋 Przepis
+              </button>
+            </div>
+          )}
+          {(!hasKroki || activeTab==="skladniki") && (
+            <div style={{background:"rgba(255,255,255,0.7)",borderRadius:10,padding:"10px 12px"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#475569",marginBottom:6,
+                textTransform:"uppercase",letterSpacing:".5px"}}>Składniki:</div>
+              {(r.skladniki||[]).map((s,i)=>(
+                <div key={i} style={{fontSize:13,color:"#1e293b",padding:"3px 0",display:"flex",gap:6}}>
+                  <span style={{color:b,fontWeight:700,flexShrink:0}}>•</span>{s}
+                </div>
+              ))}
+            </div>
+          )}
+          {hasKroki && activeTab==="przepis" && (
+            <div style={{background:"rgba(255,255,255,0.7)",borderRadius:10,padding:"10px 12px"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#475569",marginBottom:8,
+                textTransform:"uppercase",letterSpacing:".5px"}}>Sposób przyrządzania:</div>
+              {r.kroki.map((k,i)=>(
+                <div key={i} style={{fontSize:13,color:"#1e293b",padding:"5px 0",display:"flex",gap:8,
+                  borderBottom:i<r.kroki.length-1?"1px solid rgba(0,0,0,0.06)":"none"}}>
+                  <span style={{color:"#fff",fontWeight:800,flexShrink:0,fontSize:11,
+                    background:b,borderRadius:"50%",width:20,height:20,
+                    display:"flex",alignItems:"center",justifyContent:"center",marginTop:1}}>{i+1}</span>
+                  <span style={{lineHeight:1.5}}>{k}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
       {adminMode && (
@@ -412,25 +493,38 @@ function Card({r, expanded, onToggle, onEdit, onDelete, adminMode, customUrl, on
 
 /* ── Add Recipe Modal (AI) ────── */
 function AddModal({onAdd, onClose}) {
-  const [step,   setStep]  = useState(0); // 0=url, 1=loading, 2=preview, 3=done
-  const [url,    setUrl]   = useState("");
-  const [error,  setError] = useState("");
-  const [data,   setData]  = useState(null);
-  const [name,   setName]  = useState("");
-  const [cat,    setCat]   = useState("🥘 Wariacje");
-  const [sk,     setSk]    = useState([]);
-  const [note,   setNote]  = useState("");
+  const [step,      setStep]    = useState(0); // 0=url, 1=loading, 2=preview, 3=done
+  const [url,       setUrl]     = useState("");
+  const [error,     setError]   = useState("");
+  const [data,      setData]    = useState(null);
+  const [name,      setName]    = useState("");
+  const [cat,       setCat]     = useState("🥘 Wariacje");
+  const [sk,        setSk]      = useState([]);
+  const [kroki,     setKroki]   = useState([]);
+  const [note,      setNote]    = useState("");
+  const [loadMsg,      setLoadMsg]   = useState("Analizuję przepis...");
+  const [hadTranscript,setHadTrans]  = useState(false);
 
   const analyze = async () => {
     if(!url.trim()) return;
     setStep(1); setError("");
     try {
+      setLoadMsg("Pobieranie tytułu...");
       const title = await fetchYTTitle(url);
-      const result = await aiAnalyze(url, title);
+      const ytId = getYTId(url);
+      let transcript = null;
+      if (ytId) {
+        setLoadMsg("Pobieranie transkrypcji...");
+        transcript = await fetchYTTranscript(ytId);
+      }
+      setHadTrans(!!transcript);
+      setLoadMsg(transcript ? "Analizuję przepis z transkrypcją..." : "Analizuję przepis z Groq AI...");
+      const result = await aiAnalyze(url, title, transcript);
       setData(result);
       setName(result.name||"");
       setCat(result.cat||"🥘 Wariacje");
       setSk(result.skladniki||[]);
+      setKroki(result.kroki||[]);
       setNote("dodane przez społeczność 🤝");
       setStep(2);
     } catch(e) {
@@ -445,6 +539,7 @@ function AddModal({onAdd, onClose}) {
       cat, name, link: url, note,
       wiki:"", q: data?.q||name,
       skladniki: sk.filter(s=>s.trim()),
+      kroki: kroki.filter(k=>k.trim()),
       addedAt: new Date().toISOString()
     };
     await onAdd(recipe);
@@ -497,8 +592,8 @@ function AddModal({onAdd, onClose}) {
         {step===1 && (
           <div style={{textAlign:"center",padding:"36px 0"}}>
             <div style={{fontSize:52,marginBottom:12}} className="pulse">🤖</div>
-            <div style={{fontWeight:700,color:"#1e293b",fontSize:15,marginBottom:6}}>Analizuję przepis...</div>
-            <div style={{fontSize:12,color:"#94a3b8"}}>Groq AI (Llama 3.3) rozpoznaje kategorię i składniki</div>
+            <div style={{fontWeight:700,color:"#1e293b",fontSize:15,marginBottom:6}}>{loadMsg}</div>
+            <div style={{fontSize:12,color:"#94a3b8"}}>Groq AI (Llama 3.3) — transkrypcja + składniki + przepis</div>
           </div>
         )}
 
@@ -518,6 +613,21 @@ function AddModal({onAdd, onClose}) {
           <label>Składniki (jeden na linię)</label>
           <textarea rows={5} value={sk.join("\n")}
             onChange={e=>setSk(e.target.value.split("\n"))}
+            style={{resize:"vertical",lineHeight:1.8}}/>
+          <label>Sposób przyrządzania — kroki (jeden na linię)</label>
+          {hadTranscript
+            ? <div style={{fontSize:11,color:"#16a34a",padding:"6px 10px",background:"#f0fdf4",
+                borderRadius:8,marginBottom:4,border:"1px solid #bbf7d0"}}>
+                ✅ Kroki wygenerowane na podstawie transkrypcji wideo
+              </div>
+            : <div style={{fontSize:11,color:"#d97706",padding:"6px 10px",background:"#fffbeb",
+                borderRadius:8,marginBottom:4,border:"1px solid #fde68a"}}>
+                ⚠️ Brak transkrypcji — kroki na podstawie tytułu (mogą być ogólne)
+              </div>
+          }
+          <textarea rows={6} value={kroki.join("\n")}
+            onChange={e=>setKroki(e.target.value.split("\n"))}
+            placeholder="Krok 1: Pokrój mięso w plastry...\nKrok 2: ..."
             style={{resize:"vertical",lineHeight:1.8}}/>
           <div style={{display:"flex",gap:8,marginTop:16}}>
             <button className="btn" style={{flex:1,background:"#22c55e",color:"#fff"}} onClick={submit}>
@@ -995,7 +1105,7 @@ function App() {
       <SimilarRecipes recipe={expandedRecipe}/>
 
       <p style={{textAlign:"center",fontSize:11,color:"#94a3b8",padding:"0 0 20px"}}>
-        🤖 Groq AI (Llama 3.3) · 🎬 YT miniatury · 🌐 Wiki · 📷 Unsplash · 🖼️ Pexels · 💾 Supabase
+        🤖 Groq AI (Llama 3.3) · 📝 YT Transkrypcja · 🎬 YT miniatury · 🌐 Wiki · 📷 Unsplash · 🖼️ Pexels · 💾 Supabase
       </p>
 
       {/* Modals */}
