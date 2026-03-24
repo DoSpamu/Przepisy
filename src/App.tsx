@@ -4,6 +4,7 @@ import { AddModal } from './components/AddModal'
 import { ImagePicker } from './components/ImagePicker'
 import { RecipeModal } from './components/RecipeModal'
 import { SimilarRecipes } from './components/SimilarRecipes'
+import { ProponowaneTab } from './components/ProponowaneTab'
 import { BatchKrokiModal } from './components/BatchKrokiModal'
 import { sheetsLoad, sheetsSave, sheetsUpdate, sheetsDelete } from './lib/supabase'
 import { gs, ss } from './lib/storage'
@@ -99,6 +100,7 @@ export default function App() {
     'Wszystkie',
     ...(hasWieprzowina ? ['🥩 Wieprzowina'] : []),
     ...baseCats,
+    '📺 Proponowane',
   ]
   const filtered = allRecipes.filter(r => {
     const mc = activeCat === 'Wszystkie'
@@ -216,43 +218,47 @@ export default function App() {
         </div>
       </div>
 
-      {/* Karty */}
-      <div className="max-w-[980px] mx-auto mt-6 px-4">
-        {Object.keys(grouped).length === 0 && (
-          <p className="text-center mt-16" style={{ color: '#a8927a' }}>
-            {loading ? '⏳ Ładuję przepisy...' : '🍽️ Brak wyników'}
-          </p>
-        )}
-        {Object.entries(grouped).map(([cat, items]) => (
-          <div key={cat} className="mb-10">
-            {/* Cookbook-style section header */}
-            <div className="flex items-center gap-3 mb-4">
-              <div style={{ width: 5, height: 32, background: (catBorder as Record<string,string>)[cat] || '#b45309', borderRadius: 3, flexShrink: 0 }} />
-              <h2 className="serif font-bold" style={{ fontSize: 22, color: '#2c1a0e', margin: 0 }}>{cat}</h2>
-              <span className="text-[12px] font-semibold" style={{ color: '#c4a882' }}>
-                {items.length} {items.length === 1 ? 'przepis' : 'przepisy'}
-              </span>
-              <div className="flex-1" style={{ height: 1, background: 'linear-gradient(to right, #e8d4b8, transparent)' }} />
-            </div>
-            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))' }}>
-              {items.map(r => (
-                <Card key={r.id} r={r}
-                  isCommunity={commIds.has(r.id)}
-                  customUrl={chosen[r.id] || ''}
-                  onPickRequest={() => setPicker(r)}
-                  expanded={expanded === r.id}
-                  onToggle={() => setExpanded(expanded === r.id ? null : r.id)}
-                  onEdit={() => setEditModal(r)}
-                  onDelete={() => deleteRecipe(r.id)}
-                  onNoteUpdate={handleNoteUpdate}
-                  adminMode={adminMode} />
-              ))}
-            </div>
+      {/* Karty lub zakładka Proponowane */}
+      {activeCat === '📺 Proponowane' ? (
+        <ProponowaneTab />
+      ) : (
+        <>
+          <div className="max-w-[980px] mx-auto mt-6 px-4">
+            {Object.keys(grouped).length === 0 && (
+              <p className="text-center mt-16" style={{ color: '#a8927a' }}>
+                {loading ? '⏳ Ładuję przepisy...' : '🍽️ Brak wyników'}
+              </p>
+            )}
+            {Object.entries(grouped).map(([cat, items]) => (
+              <div key={cat} className="mb-10">
+                <div className="flex items-center gap-3 mb-4">
+                  <div style={{ width: 5, height: 32, background: (catBorder as Record<string,string>)[cat] || '#b45309', borderRadius: 3, flexShrink: 0 }} />
+                  <h2 className="serif font-bold" style={{ fontSize: 22, color: '#2c1a0e', margin: 0 }}>{cat}</h2>
+                  <span className="text-[12px] font-semibold" style={{ color: '#c4a882' }}>
+                    {items.length} {items.length === 1 ? 'przepis' : 'przepisy'}
+                  </span>
+                  <div className="flex-1" style={{ height: 1, background: 'linear-gradient(to right, #e8d4b8, transparent)' }} />
+                </div>
+                <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))' }}>
+                  {items.map(r => (
+                    <Card key={r.id} r={r}
+                      isCommunity={commIds.has(r.id)}
+                      customUrl={chosen[r.id] || ''}
+                      onPickRequest={() => setPicker(r)}
+                      expanded={expanded === r.id}
+                      onToggle={() => setExpanded(expanded === r.id ? null : r.id)}
+                      onEdit={() => setEditModal(r)}
+                      onDelete={() => deleteRecipe(r.id)}
+                      onNoteUpdate={handleNoteUpdate}
+                      adminMode={adminMode} />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-
-      <SimilarRecipes recipe={expandedRecipe} />
+          <SimilarRecipes recipe={expandedRecipe} />
+        </>
+      )}
 
       <p className="text-center text-[11px] pb-5" style={{ color: '#b8a48a' }}>
         🤖 Groq AI · 📝 YT Transkrypcja · 🌐 Wiki · 📷 Unsplash · 🖼️ Pexels · 💾 Supabase
