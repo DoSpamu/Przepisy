@@ -4,6 +4,17 @@ Pełna historia projektu od pierwszej linii kodu, sesja po sesji.
 
 ---
 
+## [v8.0] — 2026-03-24 — Zakładka Proponowane (YouTube RSS) + CLAUDE.md
+
+### Nowe funkcje
+- **Zakładka „📺 Proponowane"** — nowy endpoint `/api/rss.js` pobiera Atom feed YouTube (`feeds/videos.xml?channel_id=...`) bez klucza API i bez limitu quota; 10 najnowszych filmów z każdego z 4 kanałów, pogrupowane, z datą publikacji; cache 24h w localStorage; Vercel Edge Cache `s-maxage=1800`
+- **CLAUDE.md** — dokumentacja architektury projektu dla przyszłych instancji AI: data flow dodawania przepisu, opis dwóch runtime'ów (SPA + serverless), system cache'u localStorage, wyjaśnienie nieoczywistych decyzji
+
+### Poprawki
+- **PIN admin działał tylko lokalnie** — poprawka `process.env.ADMIN_KEY` była w pliku na dysku, ale nie w commicie; Vercel uruchamiał starą wersję z `ADMIN_PIN` (env var która nie istnieje) → zawsze zwracał "ADMIN_PIN not configured"
+
+---
+
 ## [v7.0] — 2026-03-24 — PIN admin, zakładka Wieprzowina, cache YouTube
 
 ### Nowe funkcje
@@ -197,6 +208,8 @@ Kompletna zmiana wyglądu z "tech dashboard" na "kulinarny notatnik":
 | `/api/unsplash.js` | Proxy + wyszukiwanie zdjęć Unsplash |
 | `/api/pexels.js` | Proxy + wyszukiwanie zdjęć Pexels |
 | `/api/youtube.js` | Wyszukiwanie filmów + resolve handle kanału |
+| `/api/rss.js` | Atom feed YouTube — najnowsze filmy z kanałów (bez klucza API) |
+| `/api/admin-verify.js` | Weryfikacja PIN admina server-side (`process.env.ADMIN_KEY`) |
 
 ### Zewnętrzne API i usługi
 | Usługa | Plan | Limit | Zastosowanie | Status |
@@ -208,6 +221,7 @@ Kompletna zmiana wyglądu z "tech dashboard" na "kulinarny notatnik":
 | **youtube-transcript.io** | Płatny | — | Transkrypcje YouTube przez Vercel proxy | ✅ aktywny |
 | **YouTube Data API v3** | Free | quota dzienna | Wyszukiwanie filmów, resolve handle | ✅ aktywny |
 | **YouTube oEmbed** | Free/open | — | Pobieranie tytułu wideo bez klucza | ✅ aktywny |
+| **YouTube Atom RSS** | Free/open | bez limitu | Najnowsze filmy z kanałów (zakładka Proponowane) | ✅ aktywny |
 | **Unsplash API** | Free | 50 req/godz. | Zdjęcia potraw | ✅ aktywny |
 | **Pexels API** | Free | 200 req/godz. | Zdjęcia potraw | ✅ aktywny |
 | **Wikimedia Commons API** | Free/open | — | Zdjęcia z Wikimedia Commons | ✅ aktywny |

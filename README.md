@@ -14,6 +14,7 @@ Prywatna baza przepisów kulinarnych z AI — dodaj link do YouTube, Facebooka l
 - **Zdjęcia potraw** z Unsplash, Pexels i Wikimedia Commons — wybierasz które pasuje
 - **Notatki i "Sprawdzony"** — każdy przepis można opatrzyć notatką i oznaczyć jako przetestowany; widoczne dla wszystkich odwiedzających
 - **Filtrowanie** po kategoriach (Kurczak, Wieprzowina, Wołowina, Ryba...) i wyszukiwarka po nazwie/składnikach
+- **Zakładka „Proponowane"** — najnowsze filmy z 4 ulubionych kanałów kulinarnych przez YouTube RSS (bez limitu API, cache 24h)
 - **Tryb admina** chroniony PINem — edycja, usuwanie, ręczne dodawanie, batch update kroków
 
 ---
@@ -39,7 +40,8 @@ Prywatna baza przepisów kulinarnych z AI — dodaj link do YouTube, Facebooka l
 | `/api/unsplash` | Wyszukiwanie zdjęć (Unsplash API) |
 | `/api/pexels` | Wyszukiwanie zdjęć (Pexels API) |
 | `/api/youtube` | Wyszukiwanie filmów + resolve handle kanału |
-| `/api/admin-verify` | Weryfikacja PIN admina (server-side, env var) |
+| `/api/admin-verify` | Weryfikacja PIN admina (server-side, `process.env.ADMIN_KEY`) |
+| `/api/rss` | Najnowsze filmy z kanałów YT przez Atom feed (bez klucza API) |
 
 ---
 
@@ -66,7 +68,7 @@ GROQ_KEY=...
 UNSPLASH_KEY=...
 PEXELS_KEY=...
 YT_KEY=...
-ADMIN_PIN=...
+ADMIN_KEY=...
 ```
 
 ```bash
@@ -122,6 +124,8 @@ Projekt zaczął się **16 marca 2026** jako pojedynczy plik `przepisy.html` (16
 | 24.03 | PIN admin — ochrona edycji/usuwania przed niepowołanymi |
 | 24.03 | Zakładka Wieprzowina — wirtualny filtr grupujący Schab + Karkówka |
 | 24.03 | Cache wyników YouTube (localStorage 24h) — ograniczenie zużycia limitu API |
+| 24.03 | Zakładka „Proponowane" — YouTube RSS feed bez klucza API, cache 24h |
+| 24.03 | CLAUDE.md — dokumentacja architektury dla przyszłych sesji AI |
 
 Pełna historia zmian: [CHANGELOG.md](./CHANGELOG.md)
 
