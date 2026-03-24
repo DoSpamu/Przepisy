@@ -19,7 +19,10 @@ export const catColors: Record<string, string> = {
   '🥘 Wariacje': '#f2fbf5', '🥗 Sałatki': '#f0fdf4', '🥖 Pieczywo': '#fffdf0',
 }
 
+export const WIEPRZOWINA_CATS = ['🥩 Schab', '🥩 Karkówka']
+
 export const catBorder: Record<string, string> = {
+  '🥩 Wieprzowina': '#c94060',
   '🐔 Kurczak': '#e8921a', '🥩 Schab': '#d44e7e', '🥩 Karkówka': '#d9394e',
   '🐄 Wołowina': '#c73333', '🌭 Kiełbasa': '#c99a0a', '🐟 Ryba': '#2d7dd8',
   '🥘 Wariacje': '#1a9e6e', '🥗 Sałatki': '#158a57', '🥖 Pieczywo': '#b86e10',

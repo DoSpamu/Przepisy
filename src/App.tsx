@@ -7,7 +7,7 @@ import { SimilarRecipes } from './components/SimilarRecipes'
 import { BatchKrokiModal } from './components/BatchKrokiModal'
 import { sheetsLoad, sheetsSave, sheetsUpdate, sheetsDelete } from './lib/supabase'
 import { gs, ss } from './lib/storage'
-import { ALL_CATS, STORAGE_IMG_KEY, STORAGE_ADM_KEY, catBorder } from './constants'
+import { ALL_CATS, WIEPRZOWINA_CATS, STORAGE_IMG_KEY, STORAGE_ADM_KEY, catBorder } from './constants'
 import type { Recipe } from './types'
 
 export default function App() {
@@ -18,6 +18,10 @@ export default function App() {
   const [expanded,     setExpanded]    = useState<number | null>(null)
   const [search,       setSearch]      = useState('')
   const [adminMode,    setAdminMode]   = useState(false)
+  const [pinModal,     setPinModal]    = useState(false)
+  const [pinValue,     setPinValue]    = useState('')
+  const [pinError,     setPinError]    = useState(false)
+  const [pinLoading,   setPinLoading]  = useState(false)
   const [editModal,    setEditModal]   = useState<Recipe | 'new' | null>(null)
   const [picker,       setPicker]      = useState<Recipe | null>(null)
   const [showAdd,      setShowAdd]     = useState(false)
@@ -64,15 +68,41 @@ export default function App() {
     setEditModal(null)
   }
 
+  const handleAdminToggle = () => {
+    if (adminMode) { setAdminMode(false); return }
+    setPinValue(''); setPinError(false); setPinModal(true)
+  }
+
+  const submitPin = async () => {
+    setPinLoading(true); setPinError(false)
+    try {
+      const r = await fetch('/api/admin-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinValue }),
+      })
+      if (r.ok) { setAdminMode(true); setPinModal(false) }
+      else { setPinError(true) }
+    } catch { setPinError(true) }
+    setPinLoading(false)
+  }
+
   const deleteRecipe = async (id: number) => {
     if (commIds.has(id)) { setCommunity(rs => rs.filter(r => r.id !== id)); await sheetsDelete(id) }
     else { setAdminRecipes(rs => rs.filter(r => r.id !== id)) }
   }
 
   const allRecipes = [...adminRecipes, ...community]
-  const cats = ['Wszystkie', ...ALL_CATS.filter(c => allRecipes.some(r => r.cat === c))]
+  const hasWieprzowina = WIEPRZOWINA_CATS.some(c => allRecipes.some(r => r.cat === c))
+  const baseCats = ALL_CATS.filter(c => allRecipes.some(r => r.cat === c))
+  const cats = [
+    'Wszystkie',
+    ...(hasWieprzowina ? ['🥩 Wieprzowina'] : []),
+    ...baseCats,
+  ]
   const filtered = allRecipes.filter(r => {
-    const mc = activeCat === 'Wszystkie' || r.cat === activeCat
+    const mc = activeCat === 'Wszystkie'
+      || (activeCat === '🥩 Wieprzowina' ? WIEPRZOWINA_CATS.includes(r.cat) : r.cat === activeCat)
     const ms = r.name.toLowerCase().includes(search.toLowerCase()) ||
       (r.skladniki || []).some(s => s.toLowerCase().includes(search.toLowerCase()))
     return mc && ms
@@ -137,7 +167,7 @@ export default function App() {
                   color: adminMode ? '#7c2d12' : '#fff',
                   border: adminMode ? 'none' : '1px solid rgba(255,255,255,0.22)',
                 }}
-                onClick={() => setAdminMode(a => !a)}>
+                onClick={handleAdminToggle}>
                 {adminMode ? '✅ Edycja ON' : '⚙️ Edytuj'}
               </button>
             </div>
@@ -227,6 +257,41 @@ export default function App() {
       <p className="text-center text-[11px] pb-5" style={{ color: '#b8a48a' }}>
         🤖 Groq AI · 📝 YT Transkrypcja · 🌐 Wiki · 📷 Unsplash · 🖼️ Pexels · 💾 Supabase
       </p>
+
+      {pinModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          style={{ background: 'rgba(61,28,2,.6)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setPinModal(false)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-[320px]"
+            style={{ boxShadow: '0 24px 64px rgba(0,0,0,.2)' }}
+            onClick={e => e.stopPropagation()}>
+            <h2 className="text-base font-extrabold text-slate-800 mb-1">🔐 Tryb admina</h2>
+            <p className="text-xs text-slate-400 mb-4">Wprowadź PIN żeby odblokować edycję</p>
+            <input
+              className="w-full px-3 py-2.5 border-[1.5px] rounded-xl text-[15px] font-mono tracking-widest text-center outline-none mb-3"
+              style={{
+                borderColor: pinError ? '#ef4444' : '#e2e8f0',
+                boxShadow: pinError ? '0 0 0 3px rgba(239,68,68,.12)' : undefined,
+              }}
+              type="password"
+              placeholder="••••"
+              value={pinValue}
+              autoFocus
+              onChange={e => { setPinValue(e.target.value); setPinError(false) }}
+              onKeyDown={e => e.key === 'Enter' && submitPin()}
+            />
+            {pinError && <p className="text-xs text-red-500 text-center mb-3">Nieprawidłowy PIN</p>}
+            <div className="flex gap-2">
+              <button className="flex-1 py-2 bg-indigo-500 hover:bg-indigo-600 text-white border-none rounded-xl text-sm font-bold cursor-pointer transition-colors disabled:opacity-50"
+                onClick={submitPin} disabled={pinLoading || !pinValue}>
+                {pinLoading ? '...' : 'Odblokuj'}
+              </button>
+              <button className="py-2 px-4 bg-slate-100 text-slate-500 border-none rounded-xl text-sm font-bold cursor-pointer"
+                onClick={() => setPinModal(false)}>Anuluj</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAdd    && <AddModal onAdd={handleAddCommunity} onClose={() => setShowAdd(false)} />}
       {picker     && <ImagePicker recipe={picker} onPick={url => handlePick(picker.id, url)} onClose={() => setPicker(null)} />}
