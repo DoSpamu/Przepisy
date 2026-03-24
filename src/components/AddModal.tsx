@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { fetchYTTitle, fetchYTTranscript, aiAnalyze } from '../lib/api'
+import { fetchYTTitle, fetchYTTranscript, fetchOGData, aiAnalyze } from '../lib/api'
 import { getYTId } from '../lib/youtube'
 import { ALL_CATS } from '../constants'
 import type { Recipe } from '../types'
@@ -23,17 +23,28 @@ export function AddModal({ onAdd, onClose }: Props) {
   const [hadTranscript, setHadTrans]= useState(false)
   const [transcript,  setTranscript]= useState('')
 
+  const isFB = (u: string) => /facebook\.com|instagram\.com|fb\.com/.test(u)
+
   const analyze = async () => {
     if (!url.trim()) return
     setStep(1); setError('')
     try {
-      setLoadMsg('Pobieranie tytułu...')
-      const title = await fetchYTTitle(url)
-      const ytId = getYTId(url)
+      let title = ''
       let trans: string | null = null
-      if (ytId) { setLoadMsg('Pobieranie transkrypcji...'); trans = await fetchYTTranscript(ytId) }
+      const ytId = getYTId(url)
+      if (isFB(url)) {
+        setLoadMsg('Pobieranie opisu posta...')
+        const og = await fetchOGData(url)
+        title = og.title || ''
+        trans = og.description || null
+        setLoadMsg('Groq analizuje przepis z opisu...')
+      } else {
+        setLoadMsg('Pobieranie tytułu...')
+        title = await fetchYTTitle(url)
+        if (ytId) { setLoadMsg('Pobieranie transkrypcji...'); trans = await fetchYTTranscript(ytId) }
+        setLoadMsg('Gemini ogląda wideo i wyciąga przepis...')
+      }
       setHadTrans(!!trans); setTranscript(trans || '')
-      setLoadMsg(trans ? 'Analizuję przepis z transkrypcją...' : 'Analizuję przepis z Groq AI...')
       const result = await aiAnalyze(url, title, trans)
       setData(result); setName(result.name || ''); setCat(result.cat || '🥘 Wariacje')
       setSk(result.skladniki || []); setKroki(result.kroki || [])
@@ -56,7 +67,7 @@ export function AddModal({ onAdd, onClose }: Props) {
 
   return (
     <div className="modal-backdrop fixed inset-0 z-[100] flex items-center justify-center p-4"
-      style={{ background: 'rgba(15,23,42,.55)', backdropFilter: 'blur(4px)' }}
+      style={{ background: 'rgba(61,28,2,.52)', backdropFilter: 'blur(4px)' }}
       onClick={onClose}>
       <div className="modal-content bg-white rounded-2xl p-6 w-full max-w-[540px] max-h-[92vh] overflow-y-auto"
         style={{ boxShadow: '0 24px 64px rgba(0,0,0,.18)' }}
@@ -71,11 +82,11 @@ export function AddModal({ onAdd, onClose }: Props) {
         </div>
 
         {step === 0 && <>
-          <label className="text-[11px] font-bold text-slate-600 block mt-3 mb-1 uppercase tracking-wide">Link YouTube lub Facebook</label>
+          <label className="text-[11px] font-bold text-slate-600 block mt-3 mb-1 uppercase tracking-wide">Link YouTube, Facebook lub Instagram</label>
           <input className="w-full px-3 py-2 border-[1.5px] border-slate-200 rounded-[10px] text-[13px] font-[inherit] outline-none focus:border-indigo-500 focus:shadow-[0_0_0_3px_rgba(99,102,241,.12)]"
             value={url} onChange={e => setUrl(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && analyze()}
-            placeholder="https://youtube.com/shorts/... lub https://youtu.be/..." />
+            placeholder="https://youtube.com/... lub https://facebook.com/... lub https://instagram.com/..." />
           {ytId && (
             <div className="mt-2.5 rounded-lg overflow-hidden border-2 border-green-400">
               <img src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`} alt=""
@@ -90,14 +101,14 @@ export function AddModal({ onAdd, onClose }: Props) {
             <button className="py-2 px-4 bg-slate-100 text-slate-500 border-none rounded-[10px] text-[13px] font-bold cursor-pointer"
               onClick={onClose}>Anuluj</button>
           </div>
-          <p className="text-[11px] text-slate-400 mt-2.5 text-center">Używa Groq AI (Llama 3.3 70B) — szybko i dokładnie</p>
+          <p className="text-[11px] text-slate-400 mt-2.5 text-center">YouTube → Gemini 2.0 Flash · Facebook/Instagram → Groq z opisem posta — darmowe</p>
         </>}
 
         {step === 1 && (
           <div className="text-center py-9">
             <div className="text-[52px] mb-3 animate-pulse">🤖</div>
             <div className="font-bold text-slate-800 text-[15px] mb-1.5">{loadMsg}</div>
-            <div className="text-xs text-slate-400">Groq AI (Llama 3.3) — transkrypcja + składniki + przepis</div>
+            <div className="text-xs text-slate-400">Groq AI + Gemini — transkrypcja + składniki + przepis</div>
           </div>
         )}
 

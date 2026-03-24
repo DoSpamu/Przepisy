@@ -10,6 +10,8 @@ export interface Recipe {
   kroki: string[]
   transcript: string
   addedAt: string
+  notatka?: string
+  sprawdzony?: boolean
 }
 
 export interface YTVideo {

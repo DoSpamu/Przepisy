@@ -10,7 +10,7 @@ interface Props {
   onClose: () => void
 }
 
-type LogEntry = { id: number; name: string; status: 'loading' | 'done' | 'error'; count?: number; trans?: boolean; fromCache?: boolean; msg?: string; message?: string }
+type LogEntry = { id: number; name: string; status: 'loading' | 'done' | 'error'; count?: number; trans?: boolean; fromCache?: boolean; source?: string; msg?: string; message?: string }
 
 export function BatchKrokiModal({ recipes, onUpdate, onClose }: Props) {
   const cancelRef = useRef(false)
@@ -18,7 +18,8 @@ export function BatchKrokiModal({ recipes, onUpdate, onClose }: Props) {
   const [current, setCurrent] = useState(0)
   const [log,     setLog]     = useState<LogEntry[]>([])
 
-  const toProcess = recipes.filter(r => r.link && (!r.kroki || r.kroki.length === 0))
+  // Zamrożona lista przy montowaniu — nie może się kurczyć gdy onUpdate aktualizuje recipes
+  const [toProcess] = useState(() => recipes.filter(r => r.link && (!r.kroki || r.kroki.length === 0)))
 
   const run = async () => {
     cancelRef.current = false
@@ -36,10 +37,11 @@ export function BatchKrokiModal({ recipes, onUpdate, onClose }: Props) {
         const result = await aiAnalyze(r.link, r.name, transcript)
         const kroki = result.kroki || []
         const skladniki = result.skladniki || r.skladniki || []
+        const source: string = result.source || 'groq'
 
         await sheetsUpdateAI(r.id, { kroki, skladniki, transcript: transcript || '' })
         onUpdate(r.id, { kroki, skladniki, transcript: transcript || '' })
-        setLog(l => l.map(e => e.id === r.id ? { ...e, status: 'done', count: kroki.length, trans: !!transcript, fromCache } : e))
+        setLog(l => l.map(e => e.id === r.id ? { ...e, status: 'done', count: kroki.length, trans: !!transcript, fromCache, source } : e))
       } catch (e: any) {
         setLog(l => l.map(e => e.id === r.id ? { ...e, status: 'error', msg: e.message } : e))
       }
@@ -52,7 +54,7 @@ export function BatchKrokiModal({ recipes, onUpdate, onClose }: Props) {
 
   return (
     <div className="modal-backdrop fixed inset-0 z-[100] flex items-center justify-center p-4"
-      style={{ background: 'rgba(15,23,42,.55)', backdropFilter: 'blur(4px)' }}
+      style={{ background: 'rgba(61,28,2,.52)', backdropFilter: 'blur(4px)' }}
       onClick={status === 'running' ? undefined : onClose}>
       <div className="modal-content bg-white rounded-2xl p-6 w-full max-w-[540px] max-h-[92vh] overflow-y-auto"
         style={{ boxShadow: '0 24px 64px rgba(0,0,0,.18)' }}
@@ -103,7 +105,7 @@ export function BatchKrokiModal({ recipes, onUpdate, onClose }: Props) {
                   {e.status === 'done' ? '✅' : e.status === 'error' ? '❌' : <span className="animate-pulse">⏳</span>}
                 </span>
                 <span className="flex-1 font-semibold">{e.name}</span>
-                {e.status === 'done' && <span className="flex-shrink-0 text-[11px] text-green-700">{e.count} kroków {e.fromCache ? '💾' : e.trans ? '📝' : ''}</span>}
+                {e.status === 'done' && <span className="flex-shrink-0 text-[11px] text-green-700">{e.count} kroków {e.fromCache ? '💾' : e.trans ? '📝' : ''} {e.source === 'gemini' ? '🎬' : '🤖'}</span>}
                 {e.status === 'error' && <span className="flex-shrink-0 text-[10px]">{e.msg}</span>}
               </div>
             ))}

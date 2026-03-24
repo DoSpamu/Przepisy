@@ -44,8 +44,8 @@ export function CardImg({ r, customUrl, adminMode, onPickRequest }: Props) {
 
   return (
     <div
-      className="relative overflow-hidden flex-shrink-0 bg-slate-800"
-      style={{ height: 160 }}
+      className="relative overflow-hidden flex-shrink-0"
+      style={{ height: 200, background: '#2c1a0e' }}
       onMouseEnter={() => showYT && setActive(true)}
       onMouseLeave={() => showYT && setActive(false)}
       onTouchStart={() => showYT && setActive(true)}
@@ -53,14 +53,14 @@ export function CardImg({ r, customUrl, adminMode, onPickRequest }: Props) {
     >
       {showCustom && (
         <img src={customUrl} alt={r.name} onError={() => setCustErr(true)}
-          className="w-full object-cover block" style={{ height: 160 }} />
+          className="w-full object-cover block" style={{ height: 200 }} />
       )}
 
       {showYT && frames.map((f, i) => (
         <YTFrame key={i} src={f.hq} fallback={f.fb}
           onError={() => { if (i === 0) setYtFail(true) }}
           style={{
-            position: 'absolute', top: 0, left: 0, width: '100%', height: 160,
+            position: 'absolute', top: 0, left: 0, width: '100%', height: 200,
             objectFit: 'cover', display: 'block',
             opacity: idx === i ? 1 : 0, transition: 'opacity 0.25s ease',
           }}
@@ -68,9 +68,16 @@ export function CardImg({ r, customUrl, adminMode, onPickRequest }: Props) {
       ))}
 
       {!showCustom && !showYT && (
-        <div className="flex flex-col items-center justify-center gap-1.5 h-full bg-slate-100">
-          <span className="text-[44px]">{catEmoji[r.cat] || '🍽️'}</span>
-          {adminMode && <span className="text-[10px] text-slate-400">kliknij 📷 aby dodać</span>}
+        <div className="flex flex-col items-center justify-center gap-2 h-full"
+          style={{ background: 'linear-gradient(135deg, #3d1c02 0%, #7c3a16 50%, #b45309 100%)' }}>
+          <span style={{ fontSize: 56, filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>
+            {catEmoji[r.cat] || '🍽️'}
+          </span>
+          {adminMode && (
+            <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,255,255,0.55)' }}>
+              kliknij 📷 aby dodać
+            </span>
+          )}
         </div>
       )}
 

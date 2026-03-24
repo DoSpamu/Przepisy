@@ -7,7 +7,7 @@ import { SimilarRecipes } from './components/SimilarRecipes'
 import { BatchKrokiModal } from './components/BatchKrokiModal'
 import { sheetsLoad, sheetsSave, sheetsUpdate, sheetsDelete } from './lib/supabase'
 import { gs, ss } from './lib/storage'
-import { ALL_CATS, STORAGE_IMG_KEY, STORAGE_ADM_KEY } from './constants'
+import { ALL_CATS, STORAGE_IMG_KEY, STORAGE_ADM_KEY, catBorder } from './constants'
 import type { Recipe } from './types'
 
 export default function App() {
@@ -39,6 +39,12 @@ export default function App() {
   }
 
   const handlePick = (id: number, url: string) => { setChosen(c => ({ ...c, [id]: url })); setPicker(null) }
+
+  const handleNoteUpdate = (id: number, notatka: string, sprawdzony: boolean) => {
+    const upd = (r: Recipe) => r.id === id ? { ...r, notatka, sprawdzony } : r
+    setCommunity(rs => rs.map(upd))
+    setAdminRecipes(rs => rs.map(upd))
+  }
 
   const handleUpdateAI = (id: number, data: { kroki: string[], skladniki: string[], transcript: string }) => {
     const upd = (r: Recipe) => r.id === id ? { ...r, ...data } : r
@@ -76,85 +82,129 @@ export default function App() {
   const expandedRecipe = allRecipes.find(r => r.id === expanded) || null
 
   return (
-    <div className="min-h-screen pb-10 bg-slate-100" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div className="min-h-screen pb-12" style={{ background: '#faf7f2' }}>
 
       {/* Header */}
-      <div className="text-white px-5 pt-6 pb-5"
-        style={{ background: 'linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#334155 100%)', boxShadow: '0 4px 20px rgba(0,0,0,.2)' }}>
+      <div className="text-white px-5 pt-8 pb-0 header-pattern"
+        style={{
+          background: 'linear-gradient(135deg, #7c2d12 0%, #b45309 55%, #d97706 100%)',
+          boxShadow: '0 6px 32px rgba(120,45,18,.28)',
+        }}>
         <div className="max-w-[980px] mx-auto">
           <div className="flex justify-between items-start gap-3 flex-wrap">
             <div>
-              <h1 className="text-[26px] font-extrabold tracking-tight">🍳 Moja Baza Przepisów</h1>
-              <p className="mt-1 opacity-70 text-[13px]">
-                {allRecipes.length} przepisów
+              {/* Decorative line above title */}
+              <div className="flex items-center gap-2 mb-1.5">
+                <div style={{ height: 1, width: 28, background: 'rgba(255,255,255,0.4)' }} />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                  Domowa Kuchnia
+                </span>
+                <div style={{ height: 1, width: 28, background: 'rgba(255,255,255,0.4)' }} />
+              </div>
+              <h1 className="serif text-[36px] font-bold leading-none" style={{ textShadow: '0 2px 12px rgba(0,0,0,.25)', letterSpacing: '-0.5px' }}>
+                Moja Kuchnia
+              </h1>
+              <p className="mt-2 text-[13px] flex items-center gap-2" style={{ color: 'rgba(255,255,255,0.68)' }}>
+                <span>{allRecipes.length} przepisów</span>
                 {commIds.size > 0 && (
-                  <span className="ml-2 rounded-[10px] px-2 py-px text-[11px]" style={{ background: 'rgba(99,102,241,0.35)' }}>
-                    +{commIds.size} community
+                  <span className="rounded-full px-2.5 py-px text-[11px] font-semibold"
+                    style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.25)' }}>
+                    +{commIds.size} wspólnych
                   </span>
                 )}
-                {loading && <span className="ml-2 opacity-60 text-[11px]">⏳ ładuję bazę...</span>}
+                {loading && <span className="opacity-60 text-[11px]">⏳ ładuję...</span>}
               </p>
             </div>
             <div className="flex gap-2 flex-wrap items-center">
-              <button className="py-2 px-4 border-none rounded-[10px] cursor-pointer text-[13px] font-bold text-white transition-all"
-                style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 2px 8px rgba(99,102,241,0.4)' }}
+              <button className="py-2 px-4 border-none rounded-xl cursor-pointer text-[13px] font-bold text-white transition-all"
+                style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
                 onClick={() => setShowAdd(true)}>
                 🤖 Dodaj przepis
               </button>
               {adminMode && (
-                <button className="py-2 px-4 border-none rounded-[10px] cursor-pointer text-[13px] font-bold text-white bg-green-500"
+                <button className="py-2 px-4 border-none rounded-xl cursor-pointer text-[13px] font-bold text-white transition-all"
+                  style={{ background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.22)' }}
                   onClick={() => setEditModal('new')}>✏️ Ręcznie</button>
               )}
               {adminMode && (
-                <button className="py-2 px-4 border-none rounded-[10px] cursor-pointer text-[13px] font-bold"
-                  style={{ background: '#f59e0b', color: '#1e293b' }}
+                <button className="py-2 px-4 border-none rounded-xl cursor-pointer text-[13px] font-bold transition-all"
+                  style={{ background: '#fbbf24', color: '#7c2d12', border: 'none', boxShadow: '0 2px 8px rgba(251,191,36,0.4)' }}
                   onClick={() => setShowBatch(true)}>🔄 Uzupełnij kroki</button>
               )}
-              <button className="py-2 px-4 border-none rounded-[10px] cursor-pointer text-[13px] font-bold transition-all"
+              <button className="py-2 px-4 border-none rounded-xl cursor-pointer text-[13px] font-bold transition-all"
                 style={{
-                  background: adminMode ? '#f59e0b' : 'rgba(255,255,255,0.15)',
-                  color: adminMode ? '#1e293b' : '#fff',
+                  background: adminMode ? '#fbbf24' : 'rgba(255,255,255,0.14)',
+                  color: adminMode ? '#7c2d12' : '#fff',
+                  border: adminMode ? 'none' : '1px solid rgba(255,255,255,0.22)',
                 }}
                 onClick={() => setAdminMode(a => !a)}>
                 {adminMode ? '✅ Edycja ON' : '⚙️ Edytuj'}
               </button>
             </div>
           </div>
-          <input
-            className="w-full mt-3.5 px-3.5 py-2.5 rounded-[10px] border-none text-sm outline-none"
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="🔍 Szukaj przepisu lub składnika..." />
-        </div>
-      </div>
 
-      {/* Kategorie */}
-      <div className="px-5 pb-3.5" style={{ background: '#1e293b' }}>
-        <div className="max-w-[980px] mx-auto flex gap-2 flex-wrap pt-3">
-          {cats.map(c => (
-            <button key={c} onClick={() => setActiveCat(c)}
-              className="cat-btn py-1.5 px-4 rounded-full border-none cursor-pointer text-[13px] font-semibold transition-all"
+          {/* Search */}
+          <div className="relative mt-5">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[14px]" style={{ color: 'rgba(255,255,255,0.5)' }}>🔍</span>
+            <input
+              className="w-full pl-10 pr-4 py-3 rounded-xl border-none text-sm outline-none"
               style={{
-                background: activeCat === c ? '#f59e0b' : 'rgba(255,255,255,0.12)',
-                color: activeCat === c ? '#1e293b' : 'white',
-                boxShadow: activeCat === c ? '0 2px 8px rgba(245,158,11,.4)' : 'none',
-              }}>
-              {c}
-            </button>
-          ))}
+                background: 'rgba(255,255,255,0.15)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255,255,255,0.25)',
+                color: '#fff',
+                fontSize: 14,
+              }}
+              value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Szukaj przepisu lub składnika..." />
+          </div>
+
+          {/* Category tabs — inside header, before the wave */}
+          <div className="flex gap-2 flex-wrap mt-5 pb-5">
+            {cats.map(c => (
+              <button key={c} onClick={() => setActiveCat(c)}
+                className="cat-btn py-1.5 px-3.5 rounded-full border-none cursor-pointer text-[13px] font-semibold"
+                style={{
+                  background: activeCat === c ? '#fff' : 'rgba(255,255,255,0.15)',
+                  color: activeCat === c ? '#7c2d12' : 'rgba(255,255,255,0.85)',
+                  boxShadow: activeCat === c ? '0 2px 10px rgba(0,0,0,0.2)' : 'none',
+                  border: activeCat === c ? 'none' : '1px solid rgba(255,255,255,0.2)',
+                  fontWeight: activeCat === c ? 700 : 500,
+                }}>
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Wave bottom edge */}
+        <div style={{ marginBottom: -1, marginLeft: -20, marginRight: -20 }}>
+          <svg viewBox="0 0 1440 48" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"
+            style={{ display: 'block', width: '100%', height: 48 }}>
+            <path d="M0,32 Q240,8 480,24 Q720,40 960,16 Q1200,-8 1440,20 L1440,48 L0,48 Z" fill="#faf7f2" />
+          </svg>
         </div>
       </div>
 
       {/* Karty */}
-      <div className="max-w-[980px] mx-auto mt-5 px-4">
+      <div className="max-w-[980px] mx-auto mt-6 px-4">
         {Object.keys(grouped).length === 0 && (
-          <p className="text-center text-slate-400 mt-10">
-            {loading ? '⏳ Ładuję przepisy...' : 'Brak wyników 😶'}
+          <p className="text-center mt-16" style={{ color: '#a8927a' }}>
+            {loading ? '⏳ Ładuję przepisy...' : '🍽️ Brak wyników'}
           </p>
         )}
         {Object.entries(grouped).map(([cat, items]) => (
-          <div key={cat} className="mb-8">
-            <h2 className="text-lg font-extrabold mb-3 text-slate-800">{cat}</h2>
-            <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))' }}>
+          <div key={cat} className="mb-10">
+            {/* Cookbook-style section header */}
+            <div className="flex items-center gap-3 mb-4">
+              <div style={{ width: 5, height: 32, background: (catBorder as Record<string,string>)[cat] || '#b45309', borderRadius: 3, flexShrink: 0 }} />
+              <h2 className="serif font-bold" style={{ fontSize: 22, color: '#2c1a0e', margin: 0 }}>{cat}</h2>
+              <span className="text-[12px] font-semibold" style={{ color: '#c4a882' }}>
+                {items.length} {items.length === 1 ? 'przepis' : 'przepisy'}
+              </span>
+              <div className="flex-1" style={{ height: 1, background: 'linear-gradient(to right, #e8d4b8, transparent)' }} />
+            </div>
+            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))' }}>
               {items.map(r => (
                 <Card key={r.id} r={r}
                   isCommunity={commIds.has(r.id)}
@@ -164,6 +214,7 @@ export default function App() {
                   onToggle={() => setExpanded(expanded === r.id ? null : r.id)}
                   onEdit={() => setEditModal(r)}
                   onDelete={() => deleteRecipe(r.id)}
+                  onNoteUpdate={handleNoteUpdate}
                   adminMode={adminMode} />
               ))}
             </div>
@@ -173,8 +224,8 @@ export default function App() {
 
       <SimilarRecipes recipe={expandedRecipe} />
 
-      <p className="text-center text-[11px] text-slate-400 pb-5">
-        🤖 Groq AI (Llama 3.3) · 📝 YT Transkrypcja · 🎬 YT miniatury · 🌐 Wiki · 📷 Unsplash · 🖼️ Pexels · 💾 Supabase
+      <p className="text-center text-[11px] pb-5" style={{ color: '#b8a48a' }}>
+        🤖 Groq AI · 📝 YT Transkrypcja · 🌐 Wiki · 📷 Unsplash · 🖼️ Pexels · 💾 Supabase
       </p>
 
       {showAdd    && <AddModal onAdd={handleAddCommunity} onClose={() => setShowAdd(false)} />}

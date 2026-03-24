@@ -13,6 +13,7 @@ export async function sheetsLoad(): Promise<Recipe[]> {
       link: r.link || '', note: r.note || '', wiki: r.wiki || '',
       q: r.q || '', skladniki: r.skladniki || [], kroki: r.kroki || [],
       transcript: r.transcript || '', addedAt: r.added_at,
+      notatka: r.notatka || '', sprawdzony: r.sprawdzony || false,
     }))
   } catch { return [] }
 }
@@ -37,7 +38,7 @@ export async function sheetsUpdate(recipe: Recipe): Promise<void> {
     const { error } = await sb.from('recipes').update({
       cat: recipe.cat, name: recipe.name, link: recipe.link,
       note: recipe.note, wiki: recipe.wiki || '', q: recipe.q || '',
-      skladniki: recipe.skladniki || [],
+      skladniki: recipe.skladniki || [], kroki: recipe.kroki || [],
     }).eq('id', recipe.id)
     if (error) console.warn('sheetsUpdate error:', error)
   } catch (e) { console.warn('sheetsUpdate error:', e) }
@@ -48,6 +49,13 @@ export async function sheetsUpdateAI(recipeId: number, data: { kroki: string[], 
     const { error } = await sb.from('recipes').update(data).eq('id', recipeId)
     if (error) console.warn('sheetsUpdateAI error:', error)
   } catch (e) { console.warn('sheetsUpdateAI error:', e) }
+}
+
+export async function saveRecipeNote(recipeId: number, notatka: string, sprawdzony: boolean): Promise<void> {
+  try {
+    const { error } = await sb.from('recipes').update({ notatka, sprawdzony }).eq('id', recipeId)
+    if (error) console.warn('saveRecipeNote error:', error)
+  } catch (e) { console.warn('saveRecipeNote error:', e) }
 }
 
 export async function sheetsDelete(recipeId: number): Promise<void> {

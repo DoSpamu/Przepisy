@@ -47,7 +47,7 @@ export function ImagePicker({ recipe, onPick, onClose }: Props) {
 
   return (
     <div className="modal-backdrop fixed inset-0 z-[100] flex items-center justify-center p-4"
-      style={{ background: 'rgba(15,23,42,.55)', backdropFilter: 'blur(4px)' }}
+      style={{ background: 'rgba(61,28,2,.52)', backdropFilter: 'blur(4px)' }}
       onClick={onClose}>
       <div className="modal-content bg-white rounded-2xl p-5 w-full max-w-[720px] max-h-[92vh] overflow-y-auto"
         style={{ boxShadow: '0 24px 64px rgba(0,0,0,.18)' }}

@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @keyframes shimmer {
@@ -15,10 +16,16 @@
 
 body {
   -webkit-font-smoothing: antialiased;
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: #faf7f2;
+}
+
+.serif {
+  font-family: 'Nunito', 'Inter', system-ui, sans-serif;
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%);
+  background: linear-gradient(90deg, #e8ddd0 25%, #f5f0e8 50%, #e8ddd0 75%);
   background-size: 200% 100%;
   animation: shimmer 1.6s ease-in-out infinite;
 }
@@ -32,19 +39,28 @@ body {
 }
 
 .recipe-card {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease;
 }
 .recipe-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.13) !important;
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(120, 60, 10, 0.13) !important;
 }
 
+.cat-btn {
+  transition: all 0.15s ease;
+}
 .cat-btn:hover {
-  opacity: 0.85;
-  transform: scale(1.04);
+  opacity: 0.9;
+  transform: scale(1.05);
+}
+
+.header-pattern {
+  background-image:
+    radial-gradient(circle at 20% 80%, rgba(255,255,255,0.07) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255,255,255,0.05) 0%, transparent 50%);
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-thumb { background: #c8b89a; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #a8926e; }

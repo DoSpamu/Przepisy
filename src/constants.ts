@@ -14,15 +14,15 @@ export const ALL_CATS = [
 ]
 
 export const catColors: Record<string, string> = {
-  '🐔 Kurczak': '#fef3c7', '🥩 Schab': '#fce7f3', '🥩 Karkówka': '#ffe4e6',
-  '🐄 Wołowina': '#fee2e2', '🌭 Kiełbasa': '#fef9c3', '🐟 Ryba': '#dbeafe',
-  '🥘 Wariacje': '#d1fae5', '🥗 Sałatki': '#ecfdf5', '🥖 Pieczywo': '#fffbeb',
+  '🐔 Kurczak': '#fffaf0', '🥩 Schab': '#fff5f7', '🥩 Karkówka': '#fff2f3',
+  '🐄 Wołowina': '#fff4f4', '🌭 Kiełbasa': '#fffdf0', '🐟 Ryba': '#f0f7ff',
+  '🥘 Wariacje': '#f2fbf5', '🥗 Sałatki': '#f0fdf4', '🥖 Pieczywo': '#fffdf0',
 }
 
 export const catBorder: Record<string, string> = {
-  '🐔 Kurczak': '#f59e0b', '🥩 Schab': '#ec4899', '🥩 Karkówka': '#f43f5e',
-  '🐄 Wołowina': '#ef4444', '🌭 Kiełbasa': '#eab308', '🐟 Ryba': '#3b82f6',
-  '🥘 Wariacje': '#10b981', '🥗 Sałatki': '#059669', '🥖 Pieczywo': '#d97706',
+  '🐔 Kurczak': '#e8921a', '🥩 Schab': '#d44e7e', '🥩 Karkówka': '#d9394e',
+  '🐄 Wołowina': '#c73333', '🌭 Kiełbasa': '#c99a0a', '🐟 Ryba': '#2d7dd8',
+  '🥘 Wariacje': '#1a9e6e', '🥗 Sałatki': '#158a57', '🥖 Pieczywo': '#b86e10',
 }
 
 export const catEmoji: Record<string, string> = {
