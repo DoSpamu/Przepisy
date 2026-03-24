@@ -5,8 +5,17 @@ import { YT_CHANNELS, STORAGE_CHAN_KEY } from '../constants'
 import type { Recipe, YTVideo } from '../types'
 
 interface Props { recipe: Recipe | null }
-
 interface Row { label: string; videos: YTVideo[] }
+
+const SEARCH_CACHE_KEY = 'yt_search_cache_v1'
+const TTL = 24 * 60 * 60 * 1000 // 24 godziny
+
+function getSearchCache(): Record<string, { rows: Row[]; ts: number }> {
+  try { return JSON.parse(localStorage.getItem(SEARCH_CACHE_KEY) || '{}') } catch { return {} }
+}
+function setSearchCache(c: Record<string, { rows: Row[]; ts: number }>) {
+  try { localStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(c)) } catch {}
+}
 
 export function SimilarRecipes({ recipe }: Props) {
   const [rows,    setRows]   = useState<Row[]>([])
@@ -17,7 +26,16 @@ export function SimilarRecipes({ recipe }: Props) {
   useEffect(() => {
     if (!recipe || recipe.id === lastId) return
     let cancelled = false
+
     const run = async () => {
+      // Sprawdź cache wyników dla tego przepisu
+      const cache = getSearchCache()
+      const cached = cache[recipe.id]
+      if (cached && Date.now() - cached.ts < TTL) {
+        setRows(cached.rows); setLastId(recipe.id)
+        return
+      }
+
       setLoading(true); setError(''); setRows([])
       try {
         let chMap: Record<string, string> = gs(STORAGE_CHAN_KEY) || {}
@@ -29,6 +47,7 @@ export function SimilarRecipes({ recipe }: Props) {
         }
         ss(STORAGE_CHAN_KEY, chMap)
         if (cancelled) return
+
         const q = recipe.name.replace(/[🎬✅😄😅🍺]/g, '').trim()
         const out: Row[] = []
         for (const ch of YT_CHANNELS) {
@@ -37,11 +56,18 @@ export function SimilarRecipes({ recipe }: Props) {
           if (vids.length) out.push({ label: ch.label, videos: vids })
           if (cancelled) return
         }
+
+        // Zapisz do cache
+        const updated = getSearchCache()
+        updated[recipe.id] = { rows: out, ts: Date.now() }
+        setSearchCache(updated)
+
         setRows(out); setLastId(recipe.id)
         if (!out.length) setError('Brak wyników dla tego przepisu.')
       } catch (e: any) { if (!cancelled) setError('Błąd: ' + e.message) }
       finally { if (!cancelled) setLoading(false) }
     }
+
     run()
     return () => { cancelled = true }
   }, [recipe?.id])

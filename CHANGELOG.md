@@ -4,6 +4,18 @@ Pełna historia projektu od pierwszej linii kodu, sesja po sesji.
 
 ---
 
+## [v7.0] — 2026-03-24 — PIN admin, zakładka Wieprzowina, cache YouTube
+
+### Nowe funkcje
+- **PIN admin** — przycisk "⚙️ Edytuj" otwiera modal z polem PIN; weryfikacja po stronie serwera (`/api/admin-verify.js`) przez `process.env.ADMIN_KEY`; PIN nigdy nie trafia do kodu przeglądarki; tryb admina aktywny do odświeżenia strony
+- **Zakładka Wieprzowina** — wirtualny filtr grupujący przepisy z kategorii Schab i Karkówka; wyświetla się jako druga zakładka (po "Wszystkie") bez zmian w bazie danych
+- **Cache wyników YouTube** — wyniki "Podobne przepisy" cachowane w localStorage na 24h per przepis; kliknięcie tego samego przepisu wiele razy w ciągu dnia nie zużywa dodatkowych jednostek API
+
+### Historia README
+- README przepisany z domyślnego template Vite na pełną dokumentację projektu (stack, endpointy, schemat DB, historia)
+
+---
+
 ## [v6.0] — 2026-03-24 — Notatki wspólne, Gemini AI, Facebook/Instagram
 
 ### Nowe funkcje

@@ -120,6 +120,8 @@ Projekt zaczął się **16 marca 2026** jako pojedynczy plik `przepisy.html` (16
 | 24.03 | Notatki i "Sprawdzony" w Supabase (widoczne dla wszystkich) |
 | 24.03 | Wyczyszczona historia git (`git-filter-repo`) — usunięte klucze ze wszystkich commitów |
 | 24.03 | PIN admin — ochrona edycji/usuwania przed niepowołanymi |
+| 24.03 | Zakładka Wieprzowina — wirtualny filtr grupujący Schab + Karkówka |
+| 24.03 | Cache wyników YouTube (localStorage 24h) — ograniczenie zużycia limitu API |
 
 Pełna historia zmian: [CHANGELOG.md](./CHANGELOG.md)
 
