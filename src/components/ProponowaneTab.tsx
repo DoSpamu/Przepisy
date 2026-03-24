@@ -13,7 +13,7 @@ interface Video {
 }
 
 const RSS_CACHE_KEY = 'rss_cache_v1'
-const TTL = 2 * 60 * 60 * 1000 // 2 godziny
+const TTL = 24 * 60 * 60 * 1000 // 24 godziny
 
 function getRssCache(): { videos: Video[]; ts: number } | null {
   try { return JSON.parse(localStorage.getItem(RSS_CACHE_KEY) || 'null') } catch { return null }
@@ -84,7 +84,7 @@ export function ProponowaneTab() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-lg font-extrabold text-slate-800">📺 Proponowane filmy</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Najnowsze przepisy z ulubionych kanałów • cache 2h</p>
+          <p className="text-xs text-slate-400 mt-0.5">Najnowsze przepisy z ulubionych kanałów • cache 24h</p>
         </div>
         <button
           onClick={load}
